@@ -544,6 +544,13 @@ func (a *AssemblerImpl) CompileMemoryWithRegisterOffsetToRegister(
 	n.srcReg2 = srcOffsetReg
 }
 
+// CompileMemoryWithRegisterSourceToRegister implements Assembler.CompileMemoryWithRegisterSourceToRegister
+func (a *AssemblerImpl) CompileMemoryWithRegisterSourceToRegister(instruction asm.Instruction, srcReg, dstReg asm.Register) {
+	n := a.newNode(instruction, operandTypesMemoryToRegister)
+	n.dstReg = dstReg
+	n.srcReg = srcReg
+}
+
 // CompileRegisterToMemoryWithRegisterOffset implements Assembler.CompileRegisterToMemoryWithRegisterOffset
 func (a *AssemblerImpl) CompileRegisterToMemoryWithRegisterOffset(
 	instruction asm.Instruction,
@@ -553,6 +560,13 @@ func (a *AssemblerImpl) CompileRegisterToMemoryWithRegisterOffset(
 	n.srcReg = srcReg
 	n.dstReg = dstBaseReg
 	n.dstReg2 = dstOffsetReg
+}
+
+// CompileRegisterToMemoryWithRegisterDest implements Assembler.CompileRegisterToMemoryWithRegisterDest
+func (a *AssemblerImpl) CompileRegisterToMemoryWithRegisterDest(instruction asm.Instruction, srcReg, dstReg asm.Register) {
+	n := a.newNode(instruction, operandTypesRegisterToMemory)
+	n.srcReg = srcReg
+	n.dstReg = dstReg
 }
 
 // CompileTwoRegistersToRegister implements Assembler.CompileTwoRegistersToRegister
@@ -1709,6 +1723,17 @@ func (a *AssemblerImpl) encodeLoadOrStoreWithRegisterOffset(
 	)
 }
 
+func (a *AssemblerImpl) encodeLoadOrStoreWithAcquireRelease(
+	buf asm.Buffer, baseRegBits, targetRegBits byte, l, size byte,
+) {
+	buf.Append4Bytes(
+		(baseRegBits<<5)|targetRegBits,
+		0b1_11111_00|(baseRegBits>>3),
+		0b1_0_011111|l<<6,
+		size<<6|0b00_001000,
+	)
+}
+
 // validateMemoryOffset validates the memory offset if the given offset can be encoded in the assembler.
 // In theory, offset can be any, but for simplicity of our homemade assembler, we limit the offset range
 // that can be encoded enough for supporting compiler.
@@ -1840,6 +1865,7 @@ func (a *AssemblerImpl) encodeRegisterToMemory(buf asm.Buffer, n *nodeImpl) (err
 		size, v                byte
 		datasize, datasizeLog2 int64
 		isTargetFloat          bool
+		isRelease              bool
 	)
 	switch n.instruction {
 	case STRD:
@@ -1854,6 +1880,14 @@ func (a *AssemblerImpl) encodeRegisterToMemory(buf asm.Buffer, n *nodeImpl) (err
 		size, v, datasize, datasizeLog2, isTargetFloat = 0b11, 0x1, 8, 3, true
 	case FSTRS:
 		size, v, datasize, datasizeLog2, isTargetFloat = 0b10, 0x1, 4, 2, true
+	case STLRD:
+		size, isRelease = 0b11, true
+	case STLRW:
+		size, isRelease = 0b10, true
+	case STLRH:
+		size, isRelease = 0b01, true
+	case STLRB:
+		size, isRelease = 0b00, true
 	default:
 		return errorEncodingUnsupported(n)
 	}
@@ -1871,6 +1905,11 @@ func (a *AssemblerImpl) encodeRegisterToMemory(buf asm.Buffer, n *nodeImpl) (err
 	baseRegBits, err := intRegisterBits(n.dstReg)
 	if err != nil {
 		return err
+	}
+
+	if isRelease {
+		a.encodeLoadOrStoreWithAcquireRelease(buf, baseRegBits, srcRegBits, 0, size)
+		return nil
 	}
 
 	const opcode = 0x00 // opcode for store instructions.
@@ -1963,6 +2002,7 @@ func (a *AssemblerImpl) encodeMemoryToRegister(buf asm.Buffer, n *nodeImpl) (err
 		size, v, opcode        byte
 		datasize, datasizeLog2 int64
 		isTargetFloat          bool
+		isAcquire              bool
 	)
 	switch n.instruction {
 	case ADR:
@@ -1989,6 +2029,14 @@ func (a *AssemblerImpl) encodeMemoryToRegister(buf asm.Buffer, n *nodeImpl) (err
 		size, v, datasize, datasizeLog2, opcode = 0b00, 0x0, 1, 0, 0b01
 	case LDRSW:
 		size, v, datasize, datasizeLog2, opcode = 0b10, 0x0, 4, 2, 0b10
+	case LDARD:
+		size, isAcquire = 0b11, true
+	case LDARW:
+		size, isAcquire = 0b10, true
+	case LDARH:
+		size, isAcquire = 0b01, true
+	case LDARB:
+		size, isAcquire = 0b00, true
 	default:
 		return errorEncodingUnsupported(n)
 	}
@@ -2005,6 +2053,11 @@ func (a *AssemblerImpl) encodeMemoryToRegister(buf asm.Buffer, n *nodeImpl) (err
 	baseRegBits, err := intRegisterBits(n.srcReg)
 	if err != nil {
 		return err
+	}
+
+	if isAcquire {
+		a.encodeLoadOrStoreWithAcquireRelease(buf, baseRegBits, dstRegBits, 1, size)
+		return nil
 	}
 
 	if n.srcReg2 != asm.NilRegister {

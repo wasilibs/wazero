@@ -20,7 +20,6 @@ var testcases embed.FS
 const enabledFeatures = api.CoreFeaturesV2 | experimental.CoreFeaturesThreads
 
 func TestCompiler(t *testing.T) {
-	t.Skip("compiler not implemented yet")
 	if !platform.CompilerSupported() {
 		t.Skip()
 	}

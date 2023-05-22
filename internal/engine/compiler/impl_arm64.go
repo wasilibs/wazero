@@ -2871,6 +2871,23 @@ func (c *arm64Compiler) compileMemoryAccessOffsetSetup(offsetArg uint32, targetS
 	return offsetRegister, nil
 }
 
+// compileMemoryAccessBaseSetup pops the top value from the stack (called "base"), stores "memoryBufferStart + base + offsetArg"
+// into a register, and returns the stored register. We call the result "base" because it refers to "base addressing" as
+// per arm docs, which are reads from addresses without offsets. The result is equivalent to &memory.Buffer[offset].
+//
+// Note: this also emits the instructions to check the out of bounds memory access.
+// In other words, if the offset+targetSizeInBytes exceeds the memory size, the code exits with nativeCallStatusCodeMemoryOutOfBounds status.
+func (c *arm64Compiler) compileMemoryAccessBaseSetup(offsetArg uint32, targetSizeInBytes int64) (baseRegister asm.Register, err error) {
+	offsetReg, err := c.compileMemoryAccessOffsetSetup(offsetArg, targetSizeInBytes)
+	if err != nil {
+		return
+	}
+
+	c.assembler.CompileRegisterToRegister(arm64.ADD, arm64ReservedRegisterForMemory, offsetReg)
+	baseRegister = offsetReg
+	return
+}
+
 // compileMemoryGrow implements compileMemoryGrow variants for arm64 architecture.
 func (c *arm64Compiler) compileMemoryGrow() error {
 	if err := c.maybeCompileMoveTopConditionalToGeneralPurposeRegister(); err != nil {
@@ -4349,5 +4366,142 @@ func (c *arm64Compiler) compileModuleContextInitialization() error {
 
 	c.assembler.SetJumpTargetOnNext(brIfModuleUnchanged)
 	c.markRegisterUnused(tmpX, tmpY)
+	return nil
+}
+
+func (c *arm64Compiler) compileAtomicLoad(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	var (
+		loadInst          asm.Instruction
+		targetSizeInBytes int64
+		vt                runtimeValueType
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		loadInst = arm64.LDARW
+		targetSizeInBytes = 32 / 8
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		loadInst = arm64.LDARD
+		targetSizeInBytes = 64 / 8
+		vt = runtimeValueTypeI64
+	}
+	return c.compileAtomicLoadImpl(offset, loadInst, targetSizeInBytes, vt)
+}
+
+// compileAtomicLoad8 implements compiler.compileAtomicLoad8 for the arm64 architecture.
+func (c *arm64Compiler) compileAtomicLoad8(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	var vt runtimeValueType
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		vt = runtimeValueTypeI64
+	}
+	return c.compileAtomicLoadImpl(offset, arm64.LDRB, 1, vt)
+}
+
+// compileAtomicLoad16 implements compiler.compileAtomicLoad16 for the arm64 architecture.
+func (c *arm64Compiler) compileAtomicLoad16(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	var vt runtimeValueType
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		vt = runtimeValueTypeI64
+	}
+	return c.compileAtomicLoadImpl(offset, arm64.LDRH, 16/8, vt)
+}
+
+func (c *arm64Compiler) compileAtomicLoadImpl(offsetArg uint32, loadInst asm.Instruction,
+	targetSizeInBytes int64, resultRuntimeValueType runtimeValueType,
+) error {
+	baseReg, err := c.compileMemoryAccessBaseSetup(offsetArg, targetSizeInBytes)
+	if err != nil {
+		return err
+	}
+
+	resultRegister := baseReg
+	c.assembler.CompileMemoryWithRegisterSourceToRegister(loadInst, baseReg, resultRegister)
+
+	c.pushRuntimeValueLocationOnRegister(resultRegister, resultRuntimeValueType)
+	return nil
+}
+
+func (c *arm64Compiler) compileAtomicStore(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	var (
+		storeInst         asm.Instruction
+		targetSizeInBytes int64
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		storeInst = arm64.STLRW
+		targetSizeInBytes = 32 / 8
+	case wazeroir.UnsignedTypeI64:
+		storeInst = arm64.STLRD
+		targetSizeInBytes = 64 / 8
+	}
+	return c.compileAtomicStoreImpl(offset, storeInst, targetSizeInBytes)
+}
+
+// compileAtomicStore8 implements compiler.compileAtomiStore8 for the arm64 architecture.
+func (c *arm64Compiler) compileAtomicStore8(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	offset := uint32(o.U2)
+	return c.compileAtomicStoreImpl(offset, arm64.STRB, 1)
+}
+
+// compileAtomicStore16 implements compiler.compileAtomicStore16 for the arm64 architecture.
+func (c *arm64Compiler) compileAtomicStore16(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	offset := uint32(o.U2)
+	return c.compileAtomicStoreImpl(offset, arm64.STRH, 16/8)
+}
+
+func (c *arm64Compiler) compileAtomicStoreImpl(offsetArg uint32, storeInst asm.Instruction, targetSizeInBytes int64) error {
+	val, err := c.popValueOnRegister()
+	if err != nil {
+		return err
+	}
+	// Mark temporarily used as compileMemoryAccessOffsetSetup might try allocating register.
+	c.markRegisterUsed(val.register)
+
+	baseReg, err := c.compileMemoryAccessBaseSetup(offsetArg, targetSizeInBytes)
+	if err != nil {
+		return err
+	}
+
+	c.assembler.CompileRegisterToMemoryWithRegisterDest(
+		storeInst,
+		val.register,
+		baseReg,
+	)
+
+	c.markRegisterUnused(val.register)
 	return nil
 }

@@ -929,6 +929,24 @@ const (
 	// FCVTN is the FCVTN instruction https://developer.arm.com/documentation/ddi0596/2021-12/SIMD-FP-Instructions/FCVTN--FCVTN2--Floating-point-Convert-to-lower-precision-Narrow--vector--?lang=en
 	FCVTN
 
+	// LDARD is the LDAR instruction in 64-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDAR--Load-Acquire-Register-
+	LDARD
+	// LDARD is the LDAR instruction in 32-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDAR--Load-Acquire-Register-
+	LDARW
+	// LDARH is the LDARH instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDARH--Load-Acquire-Register-Halfword-
+	LDARH
+	// LDARB is the LDARB instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDARB--Load-Acquire-Register-Byte-
+	LDARB
+
+	// STLRD is the STLR instruction in 64-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/STLR--Store-Release-Register-
+	STLRD
+	// STLRW is the STLR instruction in 64-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/STLR--Store-Release-Register-
+	STLRW
+	// STLRH is the STLRH instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/STLRH--Store-Release-Register-Halfword-
+	STLRH
+	// STLRB is the STLRB instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/STLRB--Store-Release-Register-Byte-
+	STLRB
+
 	// UDF is the UDF instruction https://developer.arm.com/documentation/ddi0596/2021-12/Base-Instructions/UDF--Permanently-Undefined-?lang=en
 	UDF
 
