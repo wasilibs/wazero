@@ -929,6 +929,11 @@ const (
 	// FCVTN is the FCVTN instruction https://developer.arm.com/documentation/ddi0596/2021-12/SIMD-FP-Instructions/FCVTN--FCVTN2--Floating-point-Convert-to-lower-precision-Narrow--vector--?lang=en
 	FCVTN
 
+	// LD64B is the LD64B instruction https://developer.arm.com/documentation/ddi0596/2020-12/Base-Instructions/LD64B--Single-copy-Atomic-64-byte-Load-
+	LD64B
+	// STR64B is the STR64B instruction https://developer.arm.com/documentation/ddi0596/2020-12/Base-Instructions/ST64B--Single-copy-Atomic-64-byte-Store-without-Return-
+	STR64B
+
 	// UDF is the UDF instruction https://developer.arm.com/documentation/ddi0596/2021-12/Base-Instructions/UDF--Permanently-Undefined-?lang=en
 	UDF
 
@@ -1467,6 +1472,8 @@ func InstructionName(i asm.Instruction) string {
 		return "FLDRS"
 	case UDF:
 		return "UDF"
+	case LD64B:
+		return "LD64B"
 	}
 	panic(fmt.Errorf("unknown instruction %d", i))
 }

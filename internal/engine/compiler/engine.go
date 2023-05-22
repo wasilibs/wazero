@@ -1537,6 +1537,18 @@ func compileWasmFunction(buf asm.Buffer, cmp compiler, ir *wazeroir.CompilationR
 			err = cmp.compileV128ITruncSatFromF(op)
 		case wazeroir.OperationKindBuiltinFunctionCheckExitCode:
 			err = cmp.compileBuiltinFunctionCheckExitCode()
+		case wazeroir.OperationKindAtomicLoad:
+			err = cmp.compileAtomicLoad(op)
+		case wazeroir.OperationKindAtomicLoad8:
+			err = cmp.compileAtomicLoad8(op)
+		case wazeroir.OperationKindAtomicLoad16:
+			err = cmp.compileAtomicLoad16(op)
+		case wazeroir.OperationKindAtomicStore:
+			err = cmp.compileAtomicStore(op)
+		case wazeroir.OperationKindAtomicStore8:
+			err = cmp.compileAtomicStore8(op)
+		case wazeroir.OperationKindAtomicStore16:
+			err = cmp.compileAtomicStore16(op)
 		default:
 			err = errors.New("unsupported")
 		}

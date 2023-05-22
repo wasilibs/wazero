@@ -301,6 +301,19 @@ type compiler interface {
 	// compileV128ITruncSatFromF adds instructions to perform wazeroir.NewOperationV128ITruncSatFromF.
 	compileV128ITruncSatFromF(o *wazeroir.UnionOperation) error
 
+	// compileAtomicLoad adds instructions to perform wazeroir.NewOperationAtomicLoad.
+	compileAtomicLoad(o *wazeroir.UnionOperation) error
+	// compileAtomicLoad8 adds instructions to perform wazeroir.NewOperationAtomicLoad8.
+	compileAtomicLoad8(o *wazeroir.UnionOperation) error
+	// compileAtomicLoad16 adds instructions to perform wazeroir.NewOperationAtomicLoad16.
+	compileAtomicLoad16(o *wazeroir.UnionOperation) error
+	// compileAtomicStore adds instructions to perform wazeroir.NewOperationAtomicStore.
+	compileAtomicStore(o *wazeroir.UnionOperation) error
+	// compileAtomicStore8 adds instructions to perform wazeroir.NewOperationAtomicStore8.
+	compileAtomicStore8(o *wazeroir.UnionOperation) error
+	// compileAtomicStore16 adds instructions to perform wazeroir.NewOperationAtomicStore16.
+	compileAtomicStore16(o *wazeroir.UnionOperation) error
+
 	// compileBuiltinFunctionCheckExitCode adds instructions to perform wazeroir.OperationBuiltinFunctionCheckExitCode.
 	compileBuiltinFunctionCheckExitCode() error
 

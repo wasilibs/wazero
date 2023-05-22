@@ -4351,3 +4351,138 @@ func (c *arm64Compiler) compileModuleContextInitialization() error {
 	c.markRegisterUnused(tmpX, tmpY)
 	return nil
 }
+
+func (c *arm64Compiler) compileAtomicLoad(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		// Same as normal load for 32-bits
+		return c.compileLoadImpl(offset, arm64.LDRW, 4, false, runtimeValueTypeI32)
+	case wazeroir.UnsignedTypeI64:
+		return c.compileAtomicLoad64Impl(offset)
+	default:
+		panic("BUG")
+	}
+}
+
+func (c *arm64Compiler) compileAtomicLoad64Impl(offsetArg uint32) error {
+	addrReg, err := c.compileMemoryAccessOffsetSetup(offsetArg, 8)
+	if err != nil {
+		return err
+	}
+
+	// Unlike normal load, atomic load does not have a three-register form, so we need
+	// to add the offset to base before loading.
+	c.assembler.CompileRegisterToRegister(arm64.ADD, arm64ReservedRegisterForMemory, addrReg)
+
+	resultRegister := addrReg
+
+	c.assembler.CompileMemoryWithRegisterSourceToRegister(
+		arm64.LD64B,
+		addrReg,
+		resultRegister,
+	)
+
+	c.pushRuntimeValueLocationOnRegister(resultRegister, runtimeValueTypeI64)
+	return nil
+}
+
+// compileAtomicLoad8 implements compiler.compileAtomicLoad8 for the arm64 architecture.
+func (c *arm64Compiler) compileAtomicLoad8(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	var vt runtimeValueType
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		vt = runtimeValueTypeI64
+	}
+	return c.compileLoadImpl(offset, arm64.LDRB, 1, false, vt)
+}
+
+// compileAtomicLoad16 implements compiler.compileAtomicLoad16 for the arm64 architecture.
+func (c *arm64Compiler) compileAtomicLoad16(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	var vt runtimeValueType
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		vt = runtimeValueTypeI64
+	}
+	return c.compileLoadImpl(offset, arm64.LDRH, 16/8, false, vt)
+}
+
+func (c *arm64Compiler) compileAtomicStore(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		// Same as normal store for 32-bits
+		return c.compileStoreImpl(offset, arm64.STRW, 4)
+	case wazeroir.UnsignedTypeI64:
+		return c.compileAtomicStore64Impl(offset)
+	default:
+		panic("BUG")
+	}
+}
+
+func (c *arm64Compiler) compileAtomicStore64Impl(offsetArg uint32) error {
+	val, err := c.popValueOnRegister()
+	if err != nil {
+		return err
+	}
+	// Mark temporarily used as compileMemoryAccessOffsetSetup might try allocating register.
+	c.markRegisterUsed(val.register)
+
+	addrReg, err := c.compileMemoryAccessOffsetSetup(offsetArg, 8)
+	if err != nil {
+		return err
+	}
+
+	// Unlike normal store, atomic store does not have a three-register form, so we need
+	// to add the offset to base before loading.
+	c.assembler.CompileRegisterToRegister(arm64.ADD, arm64ReservedRegisterForMemory, addrReg)
+
+	c.assembler.CompileRegisterToMemoryWithRegisterDest(
+		arm64.STR64B,
+		val.register,
+		addrReg,
+	)
+
+	c.markRegisterUnused(val.register)
+	return nil
+}
+
+// compileAtomiStore8 implements compiler.compileAtomiStore8 for the arm64 architecture.
+func (c *arm64Compiler) compileAtomicStore8(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	offset := uint32(o.U2)
+	return c.compileStoreImpl(offset, arm64.STRB, 1)
+}
+
+// compileAtomicStore16 implements compiler.compileAtomicStore16 for the arm64 architecture.
+func (c *arm64Compiler) compileAtomicStore16(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	offset := uint32(o.U2)
+	return c.compileStoreImpl(offset, arm64.STRH, 16/8)
+}

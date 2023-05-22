@@ -544,6 +544,13 @@ func (a *AssemblerImpl) CompileMemoryWithRegisterOffsetToRegister(
 	n.srcReg2 = srcOffsetReg
 }
 
+// CompileMemoryWithRegisterSourceToRegister implements Assembler.CompileMemoryWithRegisterSourceToRegister
+func (a *AssemblerImpl) CompileMemoryWithRegisterSourceToRegister(instruction asm.Instruction, srcReg, dstReg asm.Register) {
+	n := a.newNode(instruction, operandTypesMemoryToRegister)
+	n.dstReg = dstReg
+	n.srcReg = srcReg
+}
+
 // CompileRegisterToMemoryWithRegisterOffset implements Assembler.CompileRegisterToMemoryWithRegisterOffset
 func (a *AssemblerImpl) CompileRegisterToMemoryWithRegisterOffset(
 	instruction asm.Instruction,
@@ -553,6 +560,13 @@ func (a *AssemblerImpl) CompileRegisterToMemoryWithRegisterOffset(
 	n.srcReg = srcReg
 	n.dstReg = dstBaseReg
 	n.dstReg2 = dstOffsetReg
+}
+
+// CompileRegisterToMemoryWithRegisterDest implements Assembler.CompileRegisterToMemoryWithRegisterDest
+func (a *AssemblerImpl) CompileRegisterToMemoryWithRegisterDest(instruction asm.Instruction, srcReg, dstReg asm.Register) {
+	n := a.newNode(instruction, operandTypesRegisterToMemory)
+	n.srcReg = srcReg
+	n.dstReg = dstReg
 }
 
 // CompileTwoRegistersToRegister implements Assembler.CompileTwoRegistersToRegister
@@ -1854,6 +1868,8 @@ func (a *AssemblerImpl) encodeRegisterToMemory(buf asm.Buffer, n *nodeImpl) (err
 		size, v, datasize, datasizeLog2, isTargetFloat = 0b11, 0x1, 8, 3, true
 	case FSTRS:
 		size, v, datasize, datasizeLog2, isTargetFloat = 0b10, 0x1, 4, 2, true
+	case STR64B:
+		return a.encodeSTR64B(buf, n)
 	default:
 		return errorEncodingUnsupported(n)
 	}
@@ -1957,6 +1973,46 @@ func (a *AssemblerImpl) finalizeADRInstructionNode(code []byte, n *nodeImpl) (er
 	return nil
 }
 
+func (a *AssemblerImpl) encodeLD64B(buf asm.Buffer, n *nodeImpl) (err error) {
+	dstRegBits, err := intRegisterBits(n.dstReg)
+	if err != nil {
+		return
+	}
+	srcRegBits, err := intRegisterBits(n.srcReg)
+	if err != nil {
+		return err
+	}
+
+	buf.Append4Bytes(
+		(srcRegBits<<5)|dstRegBits,
+		0b111_100_00|(srcRegBits>>3),
+		0b001_111_11,
+		0b111_110_00,
+	)
+
+	return
+}
+
+func (a *AssemblerImpl) encodeSTR64B(buf asm.Buffer, n *nodeImpl) (err error) {
+	dstRegBits, err := intRegisterBits(n.dstReg)
+	if err != nil {
+		return
+	}
+	srcRegBits, err := intRegisterBits(n.srcReg)
+	if err != nil {
+		return err
+	}
+
+	buf.Append4Bytes(
+		(srcRegBits<<5)|dstRegBits,
+		0b100_100_00|(srcRegBits>>3),
+		0b001_111_11,
+		0b111_110_00,
+	)
+
+	return
+}
+
 func (a *AssemblerImpl) encodeMemoryToRegister(buf asm.Buffer, n *nodeImpl) (err error) {
 	// https://developer.arm.com/documentation/ddi0596/2021-12/Index-by-Encoding/Loads-and-Stores?lang=en#ldst_regoff
 	var (
@@ -1989,6 +2045,8 @@ func (a *AssemblerImpl) encodeMemoryToRegister(buf asm.Buffer, n *nodeImpl) (err
 		size, v, datasize, datasizeLog2, opcode = 0b00, 0x0, 1, 0, 0b01
 	case LDRSW:
 		size, v, datasize, datasizeLog2, opcode = 0b10, 0x0, 4, 2, 0b10
+	case LD64B:
+		return a.encodeLD64B(buf, n)
 	default:
 		return errorEncodingUnsupported(n)
 	}
