@@ -1468,11 +1468,11 @@ func (a *AssemblerImpl) encodeLeftShiftedRegisterToRegister(buf asm.Buffer, n *n
 
 func (a *AssemblerImpl) encodeTwoRegistersToRegister(buf asm.Buffer, n *nodeImpl) (err error) {
 	switch inst := n.instruction; inst {
-	case AND, ANDW, ORR, ORRW, EOR, EORW:
+	case AND, ANDW, ORR, ORRW, ORN, ORNW, EOR, EORW:
 		// See "Logical (shifted register)" in
 		// https://developer.arm.com/documentation/ddi0596/2021-12/Index-by-Encoding/Data-Processing----Register?lang=en
 		srcRegBits, srcReg2Bits, dstRegBits := registerBits(n.srcReg), registerBits(n.srcReg2), registerBits(n.dstReg)
-		var sf, opc byte
+		var sf, opc, n byte
 		switch inst {
 		case AND:
 			sf, opc = 0b1, 0b00
@@ -1482,6 +1482,10 @@ func (a *AssemblerImpl) encodeTwoRegistersToRegister(buf asm.Buffer, n *nodeImpl
 			sf, opc = 0b1, 0b01
 		case ORRW:
 			sf, opc = 0b0, 0b01
+		case ORN:
+			sf, opc, n = 0b1, 0b01, 0b1
+		case ORNW:
+			sf, opc, n = 0b0, 0b01, 0b1
 		case EOR:
 			sf, opc = 0b1, 0b10
 		case EORW:
@@ -1490,7 +1494,7 @@ func (a *AssemblerImpl) encodeTwoRegistersToRegister(buf asm.Buffer, n *nodeImpl
 		buf.Append4Bytes(
 			(srcReg2Bits<<5)|dstRegBits,
 			srcReg2Bits>>3,
-			srcRegBits,
+			(n<<5)|srcRegBits,
 			sf<<7|opc<<5|0b01010,
 		)
 	case ASR, ASRW, LSL, LSLW, LSR, LSRW, ROR, RORW:
@@ -1577,6 +1581,78 @@ func (a *AssemblerImpl) encodeTwoRegistersToRegister(buf asm.Buffer, n *nodeImpl
 			tp<<6|0b00_1_00000|srcRegBits,
 			0b0_00_11110,
 		)
+
+	case LDADDALD, LDADDALW, LDADDALH, LDADDALB,
+		LDCLRALD, LDCLRALW, LDCLRALH, LDCLRALB,
+		LDSETALD, LDSETALW, LDSETALH, LDSETALB,
+		LDEORALD, LDEORALW, LDEORALH, LDEORALB:
+		srcRegBits, srcReg2Bits, dstRegBits := registerBits(n.srcReg), registerBits(n.srcReg2), registerBits(n.dstReg)
+
+		var size, opcode byte
+		switch n.instruction {
+		case LDADDALD:
+			size, opcode = 0b11, 0b000
+		case LDADDALW:
+			size, opcode = 0b10, 0b000
+		case LDADDALH:
+			size, opcode = 0b01, 0b000
+		case LDADDALB:
+			size, opcode = 0b00, 0b000
+		case LDCLRALD:
+			size, opcode = 0b11, 0b001
+		case LDCLRALW:
+			size, opcode = 0b10, 0b001
+		case LDCLRALH:
+			size, opcode = 0b01, 0b001
+		case LDCLRALB:
+			size, opcode = 0b00, 0b001
+		case LDSETALD:
+			size, opcode = 0b11, 0b011
+		case LDSETALW:
+			size, opcode = 0b10, 0b011
+		case LDSETALH:
+			size, opcode = 0b01, 0b011
+		case LDSETALB:
+			size, opcode = 0b00, 0b011
+		case LDEORALD:
+			size, opcode = 0b11, 0b010
+		case LDEORALW:
+			size, opcode = 0b10, 0b010
+		case LDEORALH:
+			size, opcode = 0b01, 0b010
+		case LDEORALB:
+			size, opcode = 0b00, 0b010
+		}
+
+		buf.Append4Bytes(
+			(srcReg2Bits<<5)|dstRegBits,
+			(opcode<<5)|(srcReg2Bits>>3),
+			0b111_00000|srcRegBits,
+			(size<<6)|0b00_111_000,
+		)
+
+	case CASALD, CASALW, CASALH, CASALB:
+		srcRegBits, srcReg2Bits, dstRegBits := registerBits(n.srcReg), registerBits(n.srcReg2), registerBits(n.dstReg)
+
+		var size byte
+		switch n.instruction {
+		case CASALD:
+			size = 0b11
+		case CASALW:
+			size = 0b10
+		case CASALH:
+			size = 0b01
+		case CASALB:
+			size = 0b00
+		}
+
+		buf.Append4Bytes(
+			(srcReg2Bits<<5)|dstRegBits,
+			0b111111_00|(srcReg2Bits>>3),
+			0b111_00000|srcRegBits,
+			(size<<6)|0b00_001_000,
+		)
+
 	default:
 		return errorEncodingUnsupported(n)
 	}
@@ -1618,6 +1694,7 @@ func (a *AssemblerImpl) encodeThreeRegistersToRegister(buf asm.Buffer, n *nodeIm
 			sf<<7|0b00_11011,
 		)
 		return nil
+
 	default:
 		return errorEncodingUnsupported(n)
 	}

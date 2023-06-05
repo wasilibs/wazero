@@ -313,6 +313,12 @@ type compiler interface {
 	compileAtomicStore8(o *wazeroir.UnionOperation) error
 	// compileAtomicStore16 adds instructions to perform wazeroir.NewOperationAtomicStore16.
 	compileAtomicStore16(o *wazeroir.UnionOperation) error
+	// compileAtomicRMW adds instructions to perform wazeroir.NewOperationAtomicRMW.
+	compileAtomicRMW(o *wazeroir.UnionOperation) error
+	// compileAtomicRMW8 adds instructions to perform wazeroir.NewOperationAtomicRMW8.
+	compileAtomicRMW8(o *wazeroir.UnionOperation) error
+	// compileAtomicRMW16 adds instructions to perform wazeroir.NewOperationAtomicRMW16.
+	compileAtomicRMW16(o *wazeroir.UnionOperation) error
 
 	// compileBuiltinFunctionCheckExitCode adds instructions to perform wazeroir.OperationBuiltinFunctionCheckExitCode.
 	compileBuiltinFunctionCheckExitCode() error

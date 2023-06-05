@@ -4505,3 +4505,183 @@ func (c *arm64Compiler) compileAtomicStoreImpl(offsetArg uint32, storeInst asm.I
 	c.markRegisterUnused(val.register)
 	return nil
 }
+
+func (c *arm64Compiler) compileAtomicRMW(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	var (
+		inst              asm.Instruction
+		targetSizeInBytes int64
+		vt                runtimeValueType
+		negateArg         bool
+		flipArg           bool
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	op := wazeroir.AtomicArithmeticOp(o.B2)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		targetSizeInBytes = 32 / 8
+		vt = runtimeValueTypeI32
+		switch op {
+		case wazeroir.AtomicArithmeticOpAdd:
+			inst = arm64.LDADDALW
+		case wazeroir.AtomicArithmeticOpSub:
+			inst = arm64.LDADDALW
+			negateArg = true
+		case wazeroir.AtomicArithmeticOpAnd:
+			inst = arm64.LDCLRALW
+			flipArg = true
+		case wazeroir.AtomicArithmeticOpOr:
+			inst = arm64.LDSETALW
+		case wazeroir.AtomicArithmeticOpXor:
+			inst = arm64.LDEORALW
+		case wazeroir.AtomicArithmeticOpNop:
+			inst = arm64.CASALW
+		}
+	case wazeroir.UnsignedTypeI64:
+		targetSizeInBytes = 64 / 8
+		vt = runtimeValueTypeI64
+		switch op {
+		case wazeroir.AtomicArithmeticOpAdd:
+			inst = arm64.LDADDALD
+		case wazeroir.AtomicArithmeticOpSub:
+			inst = arm64.LDADDALD
+			negateArg = true
+		case wazeroir.AtomicArithmeticOpAnd:
+			inst = arm64.LDCLRALD
+			flipArg = true
+		case wazeroir.AtomicArithmeticOpOr:
+			inst = arm64.LDSETALD
+		case wazeroir.AtomicArithmeticOpXor:
+			inst = arm64.LDEORALD
+		case wazeroir.AtomicArithmeticOpNop:
+			inst = arm64.CASALD
+		}
+	}
+	return c.compileAtomicRMWImpl(inst, offset, negateArg, flipArg, targetSizeInBytes, vt)
+}
+
+func (c *arm64Compiler) compileAtomicRMW8(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	var (
+		inst      asm.Instruction
+		vt        runtimeValueType
+		negateArg bool
+		flipArg   bool
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	op := wazeroir.AtomicArithmeticOp(o.B2)
+	offset := uint32(o.U2)
+
+	switch op {
+	case wazeroir.AtomicArithmeticOpAdd:
+		inst = arm64.LDADDALB
+	case wazeroir.AtomicArithmeticOpSub:
+		inst = arm64.LDADDALB
+		negateArg = true
+	case wazeroir.AtomicArithmeticOpAnd:
+		inst = arm64.LDCLRALB
+		flipArg = true
+	case wazeroir.AtomicArithmeticOpOr:
+		inst = arm64.LDSETALB
+	case wazeroir.AtomicArithmeticOpXor:
+		inst = arm64.LDEORALB
+	case wazeroir.AtomicArithmeticOpNop:
+		inst = arm64.CASALB
+	}
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		vt = runtimeValueTypeI64
+	}
+	return c.compileAtomicRMWImpl(inst, offset, negateArg, flipArg, 1, vt)
+}
+
+func (c *arm64Compiler) compileAtomicRMW16(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	var (
+		inst      asm.Instruction
+		vt        runtimeValueType
+		negateArg bool
+		flipArg   bool
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	op := wazeroir.AtomicArithmeticOp(o.B2)
+	offset := uint32(o.U2)
+
+	switch op {
+	case wazeroir.AtomicArithmeticOpAdd:
+		inst = arm64.LDADDALH
+	case wazeroir.AtomicArithmeticOpSub:
+		inst = arm64.LDADDALH
+		negateArg = true
+	case wazeroir.AtomicArithmeticOpAnd:
+		inst = arm64.LDCLRALH
+		flipArg = true
+	case wazeroir.AtomicArithmeticOpOr:
+		inst = arm64.LDSETALH
+	case wazeroir.AtomicArithmeticOpXor:
+		inst = arm64.LDEORALH
+	case wazeroir.AtomicArithmeticOpNop:
+		inst = arm64.CASALH
+	}
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		vt = runtimeValueTypeI64
+	}
+	return c.compileAtomicRMWImpl(inst, offset, negateArg, flipArg, 16/2, vt)
+}
+
+func (c *arm64Compiler) compileAtomicRMWImpl(inst asm.Instruction, offsetArg uint32, negateArg bool, flipArg bool,
+	targetSizeInBytes int64, resultRuntimeValueType runtimeValueType,
+) error {
+	val, err := c.popValueOnRegister()
+	if err != nil {
+		return err
+	}
+	// Mark temporarily used as compileMemoryAccessOffsetSetup might try allocating register.
+	c.markRegisterUsed(val.register)
+
+	if negateArg {
+		switch resultRuntimeValueType {
+		case runtimeValueTypeI32:
+			c.assembler.CompileRegisterToRegister(arm64.NEG, val.register, val.register)
+		case runtimeValueTypeI64:
+			c.assembler.CompileRegisterToRegister(arm64.NEGW, val.register, val.register)
+		}
+	}
+
+	if flipArg {
+		switch resultRuntimeValueType {
+		case runtimeValueTypeI32:
+			c.assembler.CompileTwoRegistersToRegister(arm64.ORN, arm64.RegRZR, val.register, val.register)
+		case runtimeValueTypeI64:
+			c.assembler.CompileTwoRegistersToRegister(arm64.ORNW, arm64.RegRZR, val.register, val.register)
+		}
+	}
+
+	addrReg, err := c.compileMemoryAccessBaseSetup(offsetArg, targetSizeInBytes)
+	if err != nil {
+		return err
+	}
+
+	resultRegister := addrReg
+	c.assembler.CompileTwoRegistersToRegister(inst, val.register, addrReg, resultRegister)
+
+	c.markRegisterUnused(val.register)
+
+	c.pushRuntimeValueLocationOnRegister(resultRegister, resultRuntimeValueType)
+	return nil
+}

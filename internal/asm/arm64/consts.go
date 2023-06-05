@@ -667,6 +667,10 @@ const (
 	ORR
 	// ORRW is the ORR instruction, in 64-bit mode. https://developer.arm.com/documentation/dui0802/a/A64-General-Instructions/ORR--shifted-register-
 	ORRW
+	// ORN is the ORN instruction. https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/ORN--shifted-register---Bitwise-OR-NOT--shifted-register--?lang=en#ORN_32_log_shift
+	ORN
+	// ORNW is the ORN instruction, in 64-bit mode. https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/ORN--shifted-register---Bitwise-OR-NOT--shifted-register--?lang=en#ORN_32_log_shift
+	ORNW
 	// RBIT is the RBIT instruction. https://developer.arm.com/documentation/dui0802/a/A64-General-Instructions/RBIT
 	RBIT
 	// RBITW is the RBIT instruction, in 64-bit mode. https://developer.arm.com/documentation/dui0802/a/A64-General-Instructions/RBIT
@@ -946,6 +950,57 @@ const (
 	STLRH
 	// STLRB is the STLRB instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/STLRB--Store-Release-Register-Byte-
 	STLRB
+
+	// Note, there is no LDSUB type of instruction, so sub needs to be implemented by first negating the second parameter.
+
+	// LDADDALD is the LDADDAL instruction in 64-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDADD--LDADDA--LDADDAL--LDADDL--Atomic-add-on-word-or-doubleword-in-memory-
+	LDADDALD
+	// LDADDALW is the LDADDAL instruction in 32-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDADD--LDADDA--LDADDAL--LDADDL--Atomic-add-on-word-or-doubleword-in-memory-
+	LDADDALW
+	// LDADDALH is the LDADDALH instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDADDH--LDADDAH--LDADDALH--LDADDLH--Atomic-add-on-halfword-in-memory-
+	LDADDALH
+	// LDADDALB is the LDADDALB instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDADDB--LDADDAB--LDADDALB--LDADDLB--Atomic-add-on-byte-in-memory-
+	LDADDALB
+
+	// Note, arm's CLR is equivalent to AND NOT
+
+	// LDCLRALD is the LDCLRAL instruction in 64-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDCLR--LDCLRA--LDCLRAL--LDCLRL--Atomic-bit-clear-on-word-or-doubleword-in-memory-
+	LDCLRALD
+	// LDCLRALW is the LDCLRAL instruction in 32-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDCLR--LDCLRA--LDCLRAL--LDCLRL--Atomic-bit-clear-on-word-or-doubleword-in-memory-
+	LDCLRALW
+	// LDCLRALH is the LDCLRALH instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDCLRH--LDCLRAH--LDCLRALH--LDCLRLH--Atomic-bit-clear-on-halfword-in-memory-
+	LDCLRALH
+	// LDCLRALB is the LDCLRALB instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDCLRB--LDCLRAB--LDCLRALB--LDCLRLB--Atomic-bit-clear-on-byte-in-memory-
+	LDCLRALB
+
+	// Note, arm's SET is equivalent to OR
+
+	// LDSETALD is the LDSETAL instruction in 64-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDSET--LDSETA--LDSETAL--LDSETL--Atomic-bit-set-on-word-or-doubleword-in-memory-
+	LDSETALD
+	// LDSETALW is the LDSETAL instruction in 32-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDSET--LDSETA--LDSETAL--LDSETL--Atomic-bit-set-on-word-or-doubleword-in-memory-
+	LDSETALW
+	// LDSETALH is the LDSETALH instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDSETH--LDSETAH--LDSETALH--LDSETLH--Atomic-bit-set-on-halfword-in-memory-
+	LDSETALH
+	// LDSETALB is the LDSETALB instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDSETB--LDSETAB--LDSETALB--LDSETLB--Atomic-bit-set-on-byte-in-memory-
+	LDSETALB
+
+	// LDEORALD is the LDEORAL instruction in 64-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDEOR--LDEORA--LDEORAL--LDEORL--Atomic-bitwise-exclusive-OR-on-word-or-doubleword-in-memory-
+	LDEORALD
+	// LDEORALW is the LDEORAL instruction in 32-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDEOR--LDEORA--LDEORAL--LDEORL--Atomic-bitwise-exclusive-OR-on-word-or-doubleword-in-memory-
+	LDEORALW
+	// LDEORALH is the LDEORALH instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDEORH--LDEORAH--LDEORALH--LDEORLH--Atomic-bitwise-exclusive-OR-on-halfword-in-memory-
+	LDEORALH
+	// LDEORALB is the LDEORALB instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDEORB--LDEORAB--LDEORALB--LDEORLB--Atomic-bitwise-exclusive-OR-on-byte-in-memory-
+	LDEORALB
+
+	// CASALD is the CASAL instruction in 64-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/CAS--CASA--CASAL--CASL--Compare-and-swap-word-or-doubleword-in-memory-
+	CASALD
+	// CASALW is the CASAL instruction in 32-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/CAS--CASA--CASAL--CASL--Compare-and-swap-word-or-doubleword-in-memory-
+	CASALW
+	// CASALH is the CASALH instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/CASH--CASA--CASALH--CASLH--Compare-and-swap-halfword-in-memory-
+	CASALH
+	// CASALB is the CASALB instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/CASB--CASAB--CASALB--CASLB--Compare-and-swap-byte-in-memory-
+	CASALB
 
 	// UDF is the UDF instruction https://developer.arm.com/documentation/ddi0596/2021-12/Base-Instructions/UDF--Permanently-Undefined-?lang=en
 	UDF
