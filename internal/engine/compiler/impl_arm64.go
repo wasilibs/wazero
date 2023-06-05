@@ -4539,7 +4539,7 @@ func (c *arm64Compiler) compileAtomicRMW(o *wazeroir.UnionOperation) error {
 		case wazeroir.AtomicArithmeticOpXor:
 			inst = arm64.LDEORALW
 		case wazeroir.AtomicArithmeticOpNop:
-			inst = arm64.CASALW
+			inst = arm64.SWPALW
 		}
 	case wazeroir.UnsignedTypeI64:
 		targetSizeInBytes = 64 / 8
@@ -4558,7 +4558,7 @@ func (c *arm64Compiler) compileAtomicRMW(o *wazeroir.UnionOperation) error {
 		case wazeroir.AtomicArithmeticOpXor:
 			inst = arm64.LDEORALD
 		case wazeroir.AtomicArithmeticOpNop:
-			inst = arm64.CASALD
+			inst = arm64.SWPALD
 		}
 	}
 	return c.compileAtomicRMWImpl(inst, offset, negateArg, flipArg, targetSizeInBytes, vt)
@@ -4592,7 +4592,7 @@ func (c *arm64Compiler) compileAtomicRMW8(o *wazeroir.UnionOperation) error {
 	case wazeroir.AtomicArithmeticOpXor:
 		inst = arm64.LDEORALB
 	case wazeroir.AtomicArithmeticOpNop:
-		inst = arm64.CASALB
+		inst = arm64.SWPALB
 	}
 
 	switch unsignedType {
@@ -4632,7 +4632,7 @@ func (c *arm64Compiler) compileAtomicRMW16(o *wazeroir.UnionOperation) error {
 	case wazeroir.AtomicArithmeticOpXor:
 		inst = arm64.LDEORALH
 	case wazeroir.AtomicArithmeticOpNop:
-		inst = arm64.CASALH
+		inst = arm64.SWPALH
 	}
 
 	switch unsignedType {

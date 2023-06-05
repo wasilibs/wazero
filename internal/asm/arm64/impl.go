@@ -1585,43 +1585,54 @@ func (a *AssemblerImpl) encodeTwoRegistersToRegister(buf asm.Buffer, n *nodeImpl
 	case LDADDALD, LDADDALW, LDADDALH, LDADDALB,
 		LDCLRALD, LDCLRALW, LDCLRALH, LDCLRALB,
 		LDSETALD, LDSETALW, LDSETALH, LDSETALB,
-		LDEORALD, LDEORALW, LDEORALH, LDEORALB:
+		LDEORALD, LDEORALW, LDEORALH, LDEORALB,
+		SWPALD, SWPALW, SWPALH, SWPALB:
 		srcRegBits, srcReg2Bits, dstRegBits := registerBits(n.srcReg), registerBits(n.srcReg2), registerBits(n.dstReg)
 
+		// While arm's docs don't group the opcodes together for the arithmetic and swap instructions, they are
+		// actually identical except for the single bit before the opcode being 1 for swap, so we encode them together.
 		var size, opcode byte
 		switch n.instruction {
 		case LDADDALD:
-			size, opcode = 0b11, 0b000
+			size, opcode = 0b11, 0b0000
 		case LDADDALW:
-			size, opcode = 0b10, 0b000
+			size, opcode = 0b10, 0b0000
 		case LDADDALH:
-			size, opcode = 0b01, 0b000
+			size, opcode = 0b01, 0b0000
 		case LDADDALB:
-			size, opcode = 0b00, 0b000
+			size, opcode = 0b00, 0b0000
 		case LDCLRALD:
-			size, opcode = 0b11, 0b001
+			size, opcode = 0b11, 0b0001
 		case LDCLRALW:
-			size, opcode = 0b10, 0b001
+			size, opcode = 0b10, 0b0001
 		case LDCLRALH:
-			size, opcode = 0b01, 0b001
+			size, opcode = 0b01, 0b0001
 		case LDCLRALB:
-			size, opcode = 0b00, 0b001
+			size, opcode = 0b00, 0b0001
 		case LDSETALD:
-			size, opcode = 0b11, 0b011
+			size, opcode = 0b11, 0b0011
 		case LDSETALW:
-			size, opcode = 0b10, 0b011
+			size, opcode = 0b10, 0b0011
 		case LDSETALH:
-			size, opcode = 0b01, 0b011
+			size, opcode = 0b01, 0b0011
 		case LDSETALB:
-			size, opcode = 0b00, 0b011
+			size, opcode = 0b00, 0b0011
 		case LDEORALD:
-			size, opcode = 0b11, 0b010
+			size, opcode = 0b11, 0b0010
 		case LDEORALW:
-			size, opcode = 0b10, 0b010
+			size, opcode = 0b10, 0b0010
 		case LDEORALH:
-			size, opcode = 0b01, 0b010
+			size, opcode = 0b01, 0b0010
 		case LDEORALB:
-			size, opcode = 0b00, 0b010
+			size, opcode = 0b00, 0b0010
+		case SWPALD:
+			size, opcode = 0b11, 0b1000
+		case SWPALW:
+			size, opcode = 0b10, 0b1000
+		case SWPALH:
+			size, opcode = 0b01, 0b1000
+		case SWPALB:
+			size, opcode = 0b00, 0b1000
 		}
 
 		buf.Append4Bytes(

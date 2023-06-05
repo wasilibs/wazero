@@ -993,6 +993,15 @@ const (
 	// LDEORALB is the LDEORALB instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/LDEORB--LDEORAB--LDEORALB--LDEORLB--Atomic-bitwise-exclusive-OR-on-byte-in-memory-
 	LDEORALB
 
+	// SWPALD is the SWPAL instruction in 64-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/SWP--SWPA--SWPAL--SWPL--Swap-word-or-doubleword-in-memory-
+	SWPALD
+	// SWPALW is the SWPAL instruction in 32-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/SWP--SWPA--SWPAL--SWPL--Swap-word-or-doubleword-in-memory-
+	SWPALW
+	// SWPALH is the SWPALH instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/SWPH--SWPAH--SWPALH--SWPLH--Swap-halfword-in-memory-
+	SWPALH
+	// SWPALB is the SWPALB instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/SWPB--SWPAB--SWPALB--SWPLB--Swap-byte-in-memory-
+	SWPALB
+
 	// CASALD is the CASAL instruction in 64-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/CAS--CASA--CASAL--CASL--Compare-and-swap-word-or-doubleword-in-memory-
 	CASALD
 	// CASALW is the CASAL instruction in 32-bit mode https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/CAS--CASA--CASAL--CASL--Compare-and-swap-word-or-doubleword-in-memory-
