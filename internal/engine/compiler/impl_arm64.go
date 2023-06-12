@@ -4657,18 +4657,18 @@ func (c *arm64Compiler) compileAtomicRMWImpl(inst asm.Instruction, offsetArg uin
 	if negateArg {
 		switch resultRuntimeValueType {
 		case runtimeValueTypeI32:
-			c.assembler.CompileRegisterToRegister(arm64.NEG, val.register, val.register)
-		case runtimeValueTypeI64:
 			c.assembler.CompileRegisterToRegister(arm64.NEGW, val.register, val.register)
+		case runtimeValueTypeI64:
+			c.assembler.CompileRegisterToRegister(arm64.NEG, val.register, val.register)
 		}
 	}
 
 	if flipArg {
 		switch resultRuntimeValueType {
 		case runtimeValueTypeI32:
-			c.assembler.CompileTwoRegistersToRegister(arm64.ORN, arm64.RegRZR, val.register, val.register)
+			c.assembler.CompileTwoRegistersToRegister(arm64.ORNW, val.register, arm64.RegRZR, val.register)
 		case runtimeValueTypeI64:
-			c.assembler.CompileTwoRegistersToRegister(arm64.ORNW, arm64.RegRZR, val.register, val.register)
+			c.assembler.CompileTwoRegistersToRegister(arm64.ORN, val.register, arm64.RegRZR, val.register)
 		}
 	}
 

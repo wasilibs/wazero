@@ -1637,7 +1637,7 @@ func (a *AssemblerImpl) encodeTwoRegistersToRegister(buf asm.Buffer, n *nodeImpl
 
 		buf.Append4Bytes(
 			(srcReg2Bits<<5)|dstRegBits,
-			(opcode<<5)|(srcReg2Bits>>3),
+			(opcode<<4)|(srcReg2Bits>>3),
 			0b111_00000|srcRegBits,
 			(size<<6)|0b00_111_000,
 		)

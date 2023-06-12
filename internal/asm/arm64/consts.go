@@ -669,7 +669,7 @@ const (
 	ORRW
 	// ORN is the ORN instruction. https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/ORN--shifted-register---Bitwise-OR-NOT--shifted-register--?lang=en#ORN_32_log_shift
 	ORN
-	// ORNW is the ORN instruction, in 64-bit mode. https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/ORN--shifted-register---Bitwise-OR-NOT--shifted-register--?lang=en#ORN_32_log_shift
+	// ORNW is the ORN instruction, in 32-bit mode. https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/ORN--shifted-register---Bitwise-OR-NOT--shifted-register--?lang=en#ORN_32_log_shift
 	ORNW
 	// RBIT is the RBIT instruction. https://developer.arm.com/documentation/dui0802/a/A64-General-Instructions/RBIT
 	RBIT
