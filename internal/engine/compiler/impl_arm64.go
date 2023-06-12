@@ -4641,7 +4641,7 @@ func (c *arm64Compiler) compileAtomicRMW16(o *wazeroir.UnionOperation) error {
 	case wazeroir.UnsignedTypeI64:
 		vt = runtimeValueTypeI64
 	}
-	return c.compileAtomicRMWImpl(inst, offset, negateArg, flipArg, 16/2, vt)
+	return c.compileAtomicRMWImpl(inst, offset, negateArg, flipArg, 16/8, vt)
 }
 
 func (c *arm64Compiler) compileAtomicRMWImpl(inst asm.Instruction, offsetArg uint32, negateArg bool, flipArg bool,
@@ -4683,5 +4683,94 @@ func (c *arm64Compiler) compileAtomicRMWImpl(inst asm.Instruction, offsetArg uin
 	c.markRegisterUnused(val.register)
 
 	c.pushRuntimeValueLocationOnRegister(resultRegister, resultRuntimeValueType)
+	return nil
+}
+
+func (c *arm64Compiler) compileAtomicRMWCmpxchg(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	var (
+		casInst           asm.Instruction
+		targetSizeInBytes int64
+		vt                runtimeValueType
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		casInst = arm64.CASALW
+		targetSizeInBytes = 32 / 8
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		casInst = arm64.CASALD
+		targetSizeInBytes = 64 / 8
+		vt = runtimeValueTypeI64
+	}
+	return c.compileAtomicRMWCmpxchgImpl(casInst, offset, targetSizeInBytes, vt)
+}
+
+func (c *arm64Compiler) compileAtomicRMW8Cmpxchg(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	var (
+		vt runtimeValueType
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		vt = runtimeValueTypeI64
+	}
+	return c.compileAtomicRMWCmpxchgImpl(arm64.CASALB, offset, 1, vt)
+}
+
+func (c *arm64Compiler) compileAtomicRMW16Cmpxchg(o *wazeroir.UnionOperation) error {
+	// TODO: Add alignment check.
+
+	var (
+		vt runtimeValueType
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		vt = runtimeValueTypeI64
+	}
+	return c.compileAtomicRMWCmpxchgImpl(arm64.CASALH, offset, 16/8, vt)
+}
+
+func (c *arm64Compiler) compileAtomicRMWCmpxchgImpl(inst asm.Instruction, offsetArg uint32, targetSizeInBytes int64, resultRuntimeValueType runtimeValueType) error {
+	repl, err := c.popValueOnRegister()
+	if err != nil {
+		return err
+	}
+	// CAS instruction loads the old value into the register with the comparison value.
+	exp, err := c.popValueOnRegister()
+	if err != nil {
+		return err
+	}
+	// Mark temporarily used as compileMemoryAccessOffsetSetup might try allocating register.
+	c.markRegisterUsed(exp.register)
+	c.markRegisterUsed(repl.register)
+
+	addrReg, err := c.compileMemoryAccessBaseSetup(offsetArg, targetSizeInBytes)
+	if err != nil {
+		return err
+	}
+
+	c.assembler.CompileTwoRegistersToRegister(inst, addrReg, exp.register, repl.register)
+
+	c.markRegisterUnused(repl.register)
+	c.pushRuntimeValueLocationOnRegister(exp.register, resultRuntimeValueType)
 	return nil
 }

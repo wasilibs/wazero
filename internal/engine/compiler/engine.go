@@ -1555,6 +1555,12 @@ func compileWasmFunction(buf asm.Buffer, cmp compiler, ir *wazeroir.CompilationR
 			err = cmp.compileAtomicRMW8(op)
 		case wazeroir.OperationKindAtomicRMW16:
 			err = cmp.compileAtomicRMW16(op)
+		case wazeroir.OperationKindAtomicRMWCmpxchg:
+			err = cmp.compileAtomicRMWCmpxchg(op)
+		case wazeroir.OperationKindAtomicRMW8Cmpxchg:
+			err = cmp.compileAtomicRMW8Cmpxchg(op)
+		case wazeroir.OperationKindAtomicRMW16Cmpxchg:
+			err = cmp.compileAtomicRMW16Cmpxchg(op)
 		default:
 			err = errors.New("unsupported")
 		}

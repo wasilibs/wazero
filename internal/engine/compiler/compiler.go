@@ -319,6 +319,12 @@ type compiler interface {
 	compileAtomicRMW8(o *wazeroir.UnionOperation) error
 	// compileAtomicRMW16 adds instructions to perform wazeroir.NewOperationAtomicRMW16.
 	compileAtomicRMW16(o *wazeroir.UnionOperation) error
+	// compileAtomicRMWCmpxchg adds instructions to perform wazeroir.NewOperationAtomicRMWCmpxchg.
+	compileAtomicRMWCmpxchg(o *wazeroir.UnionOperation) error
+	// compileAtomicRMW8Cmpxchg adds instructions to perform wazeroir.NewOperationAtomicRMW8Cmpxchg.
+	compileAtomicRMW8Cmpxchg(o *wazeroir.UnionOperation) error
+	// compileAtomicRMW16Cmpxchg adds instructions to perform wazeroir.NewOperationAtomicRMW16Cmpxchg.
+	compileAtomicRMW16Cmpxchg(o *wazeroir.UnionOperation) error
 
 	// compileBuiltinFunctionCheckExitCode adds instructions to perform wazeroir.OperationBuiltinFunctionCheckExitCode.
 	compileBuiltinFunctionCheckExitCode() error
