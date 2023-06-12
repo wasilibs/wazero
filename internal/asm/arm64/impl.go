@@ -2300,30 +2300,38 @@ func (a *AssemblerImpl) encodeConstToRegister(buf asm.Buffer, n *nodeImpl) (err 
 	// See "Logical (immediate)" in
 	// https://developer.arm.com/documentation/ddi0596/2021-12/Index-by-Encoding/Data-Processing----Immediate
 	switch n.instruction {
-	case ANDIMM32:
-		var sf, opc byte = 0b0, 0b00
+	case ANDIMM32, ANDIMM64, ANDSW, ANDS:
 		if !isBitMaskImmediate(uint64(c)) {
-			err = fmt.Errorf("const %d must be valid bitmask immediate for %s", c, InstructionName(ANDIMM64))
+			err = fmt.Errorf("const %d must be valid bitmask immediate for %s", c, InstructionName(n.instruction))
 			return
 		}
-		immr, imms, N := bitmaskImmediate(uint64(c), false)
-		buf.Append4Bytes(
-			(dstRegBits<<5)|dstRegBits,
-			imms<<2|dstRegBits>>3,
-			N<<6|immr,
-			sf<<7|opc<<5|0b10010,
-		)
-		return
-	case ANDIMM64:
-		var sf, opc byte = 0b1, 0b00
-		if !isBitMaskImmediate(uint64(c)) {
-			err = fmt.Errorf("const %d must be valid bitmask immediate for %s", c, InstructionName(ANDIMM64))
-			return
+		srcRegBits := dstRegBits
+		var sf, opc, immr, imms, N byte
+		switch n.instruction {
+		case ANDIMM32:
+			sf, opc = 0b0, 0b00
+			immr, imms, N = bitmaskImmediate(uint64(c), false)
+		case ANDIMM64:
+			sf, opc = 0b1, 0b00
+			immr, imms, N = bitmaskImmediate(uint64(c), true)
+		case ANDSW:
+			srcRegBits, err = intRegisterBits(n.srcReg)
+			if err != nil {
+				return err
+			}
+			sf, opc = 0b0, 0b11
+			immr, imms, N = bitmaskImmediate(uint64(c), false)
+		case ANDS:
+			srcRegBits, err = intRegisterBits(n.srcReg)
+			if err != nil {
+				return err
+			}
+			sf, opc = 0b1, 0b11
+			immr, imms, N = bitmaskImmediate(uint64(c), true)
 		}
-		immr, imms, N := bitmaskImmediate(uint64(c), true)
 		buf.Append4Bytes(
-			(dstRegBits<<5)|dstRegBits,
-			imms<<2|dstRegBits>>3,
+			(srcRegBits<<5)|dstRegBits,
+			imms<<2|srcRegBits>>3,
 			N<<6|immr,
 			sf<<7|opc<<5|0b10010,
 		)

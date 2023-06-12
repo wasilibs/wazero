@@ -469,6 +469,10 @@ const (
 	ANDIMM64
 	// ANDW is the AND instruction, in 64-bit mode. https://developer.arm.com/documentation/dui0802/a/A64-General-Instructions/AND--register-
 	ANDW
+	// ANDS is the ANDS instruction in 64-bit mode https://developer.arm.com/documentation/ddi0596/2021-12/Base-Instructions/ANDS--immediate---Bitwise-AND--immediate---setting-flags-?lang=en
+	ANDS
+	// ANDSW is the ANDS instruction in 32-bit mode https://developer.arm.com/documentation/ddi0596/2021-12/Base-Instructions/ANDS--immediate---Bitwise-AND--immediate---setting-flags-?lang=en
+	ANDSW
 	// ASR is the ASR instruction. https://developer.arm.com/documentation/dui0802/a/A64-General-Instructions/ASR--register-
 	ASR
 	// ASRW is the ASR instruction, in 64-bit mode. https://developer.arm.com/documentation/dui0802/a/A64-General-Instructions/ASR--register-

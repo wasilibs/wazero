@@ -417,6 +417,7 @@ const (
 	nativeCallStatusIntegerOverflow
 	nativeCallStatusIntegerDivisionByZero
 	nativeCallStatusModuleClosed
+	nativeCallStatusUnalignedAtomic
 )
 
 // causePanic causes a panic with the corresponding error to the nativeCallStatusCode.
@@ -437,6 +438,8 @@ func (s nativeCallStatusCode) causePanic() {
 		err = wasmruntime.ErrRuntimeInvalidTableAccess
 	case nativeCallStatusCodeTypeMismatchOnIndirectCall:
 		err = wasmruntime.ErrRuntimeIndirectCallTypeMismatch
+	case nativeCallStatusUnalignedAtomic:
+		err = wasmruntime.ErrRuntimeUnalignedAtomic
 	}
 	panic(err)
 }
@@ -465,6 +468,8 @@ func (s nativeCallStatusCode) String() (ret string) {
 		ret = "integer division by zero"
 	case nativeCallStatusModuleClosed:
 		ret = "module closed"
+	case nativeCallStatusUnalignedAtomic:
+		ret = "unaligned atomic"
 	default:
 		panic("BUG")
 	}

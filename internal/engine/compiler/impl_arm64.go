@@ -2888,6 +2888,26 @@ func (c *arm64Compiler) compileMemoryAccessBaseSetup(offsetArg uint32, targetSiz
 	return
 }
 
+func (c *arm64Compiler) compileMemoryAlignmentCheck(baseRegister asm.Register, targetSizeInBytes int64) {
+	if targetSizeInBytes == 1 {
+		return // No alignment restrictions when accessing a byte
+	}
+	var checkBits asm.ConstantValue
+	switch targetSizeInBytes {
+	case 2:
+		checkBits = 0b1
+	case 4:
+		checkBits = 0b11
+	case 8:
+		checkBits = 0b111
+	}
+	c.assembler.CompileRegisterAndConstToRegister(arm64.ANDS, baseRegister, checkBits, arm64.RegRZR)
+	aligned := c.assembler.CompileJump(arm64.BCONDEQ)
+
+	c.compileExitFromNativeCode(nativeCallStatusUnalignedAtomic)
+	c.assembler.SetJumpTargetOnNext(aligned)
+}
+
 // compileMemoryGrow implements compileMemoryGrow variants for arm64 architecture.
 func (c *arm64Compiler) compileMemoryGrow() error {
 	if err := c.maybeCompileMoveTopConditionalToGeneralPurposeRegister(); err != nil {
@@ -4370,8 +4390,6 @@ func (c *arm64Compiler) compileModuleContextInitialization() error {
 }
 
 func (c *arm64Compiler) compileAtomicLoad(o *wazeroir.UnionOperation) error {
-	// TODO: Add alignment check.
-
 	var (
 		loadInst          asm.Instruction
 		targetSizeInBytes int64
@@ -4396,8 +4414,6 @@ func (c *arm64Compiler) compileAtomicLoad(o *wazeroir.UnionOperation) error {
 
 // compileAtomicLoad8 implements compiler.compileAtomicLoad8 for the arm64 architecture.
 func (c *arm64Compiler) compileAtomicLoad8(o *wazeroir.UnionOperation) error {
-	// TODO: Add alignment check.
-
 	var vt runtimeValueType
 
 	unsignedType := wazeroir.UnsignedType(o.B1)
@@ -4414,8 +4430,6 @@ func (c *arm64Compiler) compileAtomicLoad8(o *wazeroir.UnionOperation) error {
 
 // compileAtomicLoad16 implements compiler.compileAtomicLoad16 for the arm64 architecture.
 func (c *arm64Compiler) compileAtomicLoad16(o *wazeroir.UnionOperation) error {
-	// TODO: Add alignment check.
-
 	var vt runtimeValueType
 
 	unsignedType := wazeroir.UnsignedType(o.B1)
@@ -4438,6 +4452,8 @@ func (c *arm64Compiler) compileAtomicLoadImpl(offsetArg uint32, loadInst asm.Ins
 		return err
 	}
 
+	c.compileMemoryAlignmentCheck(baseReg, targetSizeInBytes)
+
 	resultRegister := baseReg
 	c.assembler.CompileMemoryWithRegisterSourceToRegister(loadInst, baseReg, resultRegister)
 
@@ -4446,8 +4462,6 @@ func (c *arm64Compiler) compileAtomicLoadImpl(offsetArg uint32, loadInst asm.Ins
 }
 
 func (c *arm64Compiler) compileAtomicStore(o *wazeroir.UnionOperation) error {
-	// TODO: Add alignment check.
-
 	var (
 		storeInst         asm.Instruction
 		targetSizeInBytes int64
@@ -4469,16 +4483,12 @@ func (c *arm64Compiler) compileAtomicStore(o *wazeroir.UnionOperation) error {
 
 // compileAtomicStore8 implements compiler.compileAtomiStore8 for the arm64 architecture.
 func (c *arm64Compiler) compileAtomicStore8(o *wazeroir.UnionOperation) error {
-	// TODO: Add alignment check.
-
 	offset := uint32(o.U2)
 	return c.compileAtomicStoreImpl(offset, arm64.STRB, 1)
 }
 
 // compileAtomicStore16 implements compiler.compileAtomicStore16 for the arm64 architecture.
 func (c *arm64Compiler) compileAtomicStore16(o *wazeroir.UnionOperation) error {
-	// TODO: Add alignment check.
-
 	offset := uint32(o.U2)
 	return c.compileAtomicStoreImpl(offset, arm64.STRH, 16/8)
 }
@@ -4495,6 +4505,7 @@ func (c *arm64Compiler) compileAtomicStoreImpl(offsetArg uint32, storeInst asm.I
 	if err != nil {
 		return err
 	}
+	c.compileMemoryAlignmentCheck(baseReg, targetSizeInBytes)
 
 	c.assembler.CompileRegisterToMemoryWithRegisterDest(
 		storeInst,
@@ -4507,8 +4518,6 @@ func (c *arm64Compiler) compileAtomicStoreImpl(offsetArg uint32, storeInst asm.I
 }
 
 func (c *arm64Compiler) compileAtomicRMW(o *wazeroir.UnionOperation) error {
-	// TODO: Add alignment check.
-
 	var (
 		inst              asm.Instruction
 		targetSizeInBytes int64
@@ -4565,8 +4574,6 @@ func (c *arm64Compiler) compileAtomicRMW(o *wazeroir.UnionOperation) error {
 }
 
 func (c *arm64Compiler) compileAtomicRMW8(o *wazeroir.UnionOperation) error {
-	// TODO: Add alignment check.
-
 	var (
 		inst      asm.Instruction
 		vt        runtimeValueType
@@ -4605,8 +4612,6 @@ func (c *arm64Compiler) compileAtomicRMW8(o *wazeroir.UnionOperation) error {
 }
 
 func (c *arm64Compiler) compileAtomicRMW16(o *wazeroir.UnionOperation) error {
-	// TODO: Add alignment check.
-
 	var (
 		inst      asm.Instruction
 		vt        runtimeValueType
@@ -4676,6 +4681,7 @@ func (c *arm64Compiler) compileAtomicRMWImpl(inst asm.Instruction, offsetArg uin
 	if err != nil {
 		return err
 	}
+	c.compileMemoryAlignmentCheck(addrReg, targetSizeInBytes)
 
 	resultRegister := addrReg
 	c.assembler.CompileTwoRegistersToRegister(inst, val.register, addrReg, resultRegister)
@@ -4687,8 +4693,6 @@ func (c *arm64Compiler) compileAtomicRMWImpl(inst asm.Instruction, offsetArg uin
 }
 
 func (c *arm64Compiler) compileAtomicRMWCmpxchg(o *wazeroir.UnionOperation) error {
-	// TODO: Add alignment check.
-
 	var (
 		casInst           asm.Instruction
 		targetSizeInBytes int64
@@ -4712,8 +4716,6 @@ func (c *arm64Compiler) compileAtomicRMWCmpxchg(o *wazeroir.UnionOperation) erro
 }
 
 func (c *arm64Compiler) compileAtomicRMW8Cmpxchg(o *wazeroir.UnionOperation) error {
-	// TODO: Add alignment check.
-
 	var (
 		vt runtimeValueType
 	)
@@ -4731,8 +4733,6 @@ func (c *arm64Compiler) compileAtomicRMW8Cmpxchg(o *wazeroir.UnionOperation) err
 }
 
 func (c *arm64Compiler) compileAtomicRMW16Cmpxchg(o *wazeroir.UnionOperation) error {
-	// TODO: Add alignment check.
-
 	var (
 		vt runtimeValueType
 	)
@@ -4767,6 +4767,7 @@ func (c *arm64Compiler) compileAtomicRMWCmpxchgImpl(inst asm.Instruction, offset
 	if err != nil {
 		return err
 	}
+	c.compileMemoryAlignmentCheck(addrReg, targetSizeInBytes)
 
 	c.assembler.CompileTwoRegistersToRegister(inst, exp.register, addrReg, repl.register)
 
