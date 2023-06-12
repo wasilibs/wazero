@@ -4768,7 +4768,7 @@ func (c *arm64Compiler) compileAtomicRMWCmpxchgImpl(inst asm.Instruction, offset
 		return err
 	}
 
-	c.assembler.CompileTwoRegistersToRegister(inst, addrReg, exp.register, repl.register)
+	c.assembler.CompileTwoRegistersToRegister(inst, exp.register, addrReg, repl.register)
 
 	c.markRegisterUnused(repl.register)
 	c.pushRuntimeValueLocationOnRegister(exp.register, resultRuntimeValueType)
