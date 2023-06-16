@@ -4775,3 +4775,134 @@ func (c *arm64Compiler) compileAtomicRMWCmpxchgImpl(inst asm.Instruction, offset
 	c.pushRuntimeValueLocationOnRegister(exp.register, resultRuntimeValueType)
 	return nil
 }
+
+func (c *arm64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) error {
+	if err := c.maybeCompileMoveTopConditionalToGeneralPurposeRegister(); err != nil {
+		return err
+	}
+
+	var (
+		loadInst          asm.Instruction
+		cmpInst           asm.Instruction
+		targetSizeInBytes int64
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		loadInst = arm64.LDARW
+		cmpInst = arm64.CMPW
+		targetSizeInBytes = 32 / 8
+	case wazeroir.UnsignedTypeI64:
+		loadInst = arm64.LDARD
+		cmpInst = arm64.CMP
+		targetSizeInBytes = 64 / 8
+	}
+
+	timeout, err := c.popValueOnRegister()
+	if err != nil {
+		return err
+	}
+	exp, err := c.popValueOnRegister()
+	if err != nil {
+		return err
+	}
+	// Mark temporarily used as compileMemoryAccessOffsetSetup might try allocating register.
+	c.markRegisterUsed(timeout.register)
+	c.markRegisterUsed(exp.register)
+
+	baseReg, err := c.compileMemoryAccessBaseSetup(offset, targetSizeInBytes)
+	if err != nil {
+		return err
+	}
+	c.compileMemoryAlignmentCheck(baseReg, targetSizeInBytes)
+
+	resultRegister, err := c.allocateRegister(registerTypeGeneralPurpose)
+	if err != nil {
+		return err
+	}
+	c.assembler.CompileMemoryWithRegisterSourceToRegister(loadInst, baseReg, resultRegister)
+
+	c.assembler.CompileTwoRegistersToNone(cmpInst, resultRegister, exp.register)
+	matched := c.assembler.CompileJump(arm64.BCONDEQ)
+
+	c.assembler.CompileConstToRegister(arm64.MOVW, 1, resultRegister)
+	exit := c.assembler.CompileJump(arm64.B)
+
+	c.assembler.SetJumpTargetOnNext(matched)
+
+	// Push address and timeout back to read in Go
+	c.pushRuntimeValueLocationOnRegister(baseReg, runtimeValueTypeI64)
+	c.pushRuntimeValueLocationOnRegister(timeout.register, runtimeValueTypeI64)
+	if err := c.compileCallGoFunction(nativeCallStatusCodeCallBuiltInFunction, builtinFunctionMemoryWait); err != nil {
+		return err
+	}
+	// Address and timeout consumed in Go
+	c.locationStack.pop()
+	c.locationStack.pop()
+
+	// Then, the result was pushed.
+	v := c.locationStack.pushRuntimeValueLocationOnStack()
+	v.valueType = runtimeValueTypeI32
+
+	// Load the result from Go into a register to copy into the final result register.
+	goResultReg, err := c.popValueOnRegister()
+	if err != nil {
+		return err
+	}
+	c.assembler.CompileRegisterToRegister(arm64.MOVW, goResultReg.register, resultRegister)
+
+	c.assembler.SetJumpTargetOnNext(exit)
+
+	c.markRegisterUnused(exp.register)
+	c.markRegisterUnused(timeout.register)
+
+	c.pushRuntimeValueLocationOnRegister(resultRegister, runtimeValueTypeI32)
+
+	// After return, we re-initialize reserved registers just like preamble of functions.
+	c.compileReservedStackBasePointerRegisterInitialization()
+	c.compileReservedMemoryRegisterInitialization()
+
+	return nil
+}
+
+func (c *arm64Compiler) compileAtomicMemoryNotify(o *wazeroir.UnionOperation) error {
+	offset := uint32(o.U2)
+
+	if err := c.maybeCompileMoveTopConditionalToGeneralPurposeRegister(); err != nil {
+		return err
+	}
+
+	count, err := c.popValueOnRegister()
+	if err != nil {
+		return err
+	}
+
+	baseReg, err := c.compileMemoryAccessBaseSetup(offset, 4)
+	if err != nil {
+		return err
+	}
+	c.compileMemoryAlignmentCheck(baseReg, 4)
+
+	// Push address and count back to read in Go
+	c.pushRuntimeValueLocationOnRegister(baseReg, runtimeValueTypeI64)
+	c.pushRuntimeValueLocationOnRegister(count.register, runtimeValueTypeI32)
+	if err := c.compileCallGoFunction(nativeCallStatusCodeCallBuiltInFunction, builtinFunctionMemoryNotify); err != nil {
+		return err
+	}
+
+	// Address and count consumed by Go
+	c.locationStack.pop()
+	c.locationStack.pop()
+
+	// Then, the result was pushed.
+	v := c.locationStack.pushRuntimeValueLocationOnStack()
+	v.valueType = runtimeValueTypeI32
+
+	// After return, we re-initialize reserved registers just like preamble of functions.
+	c.compileReservedStackBasePointerRegisterInitialization()
+	c.compileReservedMemoryRegisterInitialization()
+	return nil
+}

@@ -998,6 +998,8 @@ const (
 	builtinFunctionIndexCheckExitCode
 	// builtinFunctionIndexBreakPoint is internal (only for wazero developers). Disabled by default.
 	builtinFunctionIndexBreakPoint
+	builtinFunctionMemoryWait
+	builtinFunctionMemoryNotify
 )
 
 func (ce *callEngine) execWasmFunction(ctx context.Context, m *wasm.ModuleInstance) {
@@ -1044,6 +1046,10 @@ entry:
 				ce.builtinFunctionGrowStack(caller.parent.stackPointerCeil)
 			case builtinFunctionIndexTableGrow:
 				ce.builtinFunctionTableGrow(caller.moduleInstance.Tables)
+			case builtinFunctionMemoryWait:
+				ce.builtinFunctionMemoryWait(caller.moduleInstance.MemoryInstance)
+			case builtinFunctionMemoryNotify:
+				ce.builtinFunctionMemoryNotify(caller.moduleInstance.MemoryInstance)
 			case builtinFunctionIndexFunctionListenerBefore:
 				ce.builtinFunctionFunctionListenerBefore(ctx, m, caller)
 			case builtinFunctionIndexFunctionListenerAfter:
@@ -1117,6 +1123,31 @@ func (ce *callEngine) builtinFunctionTableGrow(tables []*wasm.TableInstance) {
 	ref := ce.popValue()
 	res := table.Grow(uint32(num), uintptr(ref))
 	ce.pushValue(uint64(res))
+}
+
+func (ce *callEngine) builtinFunctionMemoryWait(mem *wasm.MemoryInstance) {
+	timeout := ce.popValue()
+	addr := ce.popValue()
+
+	offset := uint32(uintptr(addr) - uintptr(unsafe.Pointer(&mem.Buffer[0])))
+	tooMany, timedOut := mem.Wait(offset, int64(timeout))
+	if tooMany {
+		// TODO(anuraaga): Handle this correctly
+		panic(wasmruntime.ErrRuntimeTooManyWaiters)
+	} else if timedOut {
+		ce.pushValue(2)
+	} else {
+		ce.pushValue(0)
+	}
+}
+
+func (ce *callEngine) builtinFunctionMemoryNotify(mem *wasm.MemoryInstance) {
+	count := ce.popValue()
+	addr := ce.popValue()
+
+	offset := uint32(uintptr(addr) - uintptr(unsafe.Pointer(&mem.Buffer[0])))
+
+	ce.pushValue(uint64(mem.Notify(offset, uint32(count))))
 }
 
 // stackIterator implements experimental.StackIterator.
@@ -1566,6 +1597,10 @@ func compileWasmFunction(buf asm.Buffer, cmp compiler, ir *wazeroir.CompilationR
 			err = cmp.compileAtomicRMW8Cmpxchg(op)
 		case wazeroir.OperationKindAtomicRMW16Cmpxchg:
 			err = cmp.compileAtomicRMW16Cmpxchg(op)
+		case wazeroir.OperationKindAtomicMemoryWait:
+			err = cmp.compileAtomicMemoryWait(op)
+		case wazeroir.OperationKindAtomicMemoryNotify:
+			err = cmp.compileAtomicMemoryNotify(op)
 		default:
 			err = errors.New("unsupported")
 		}
