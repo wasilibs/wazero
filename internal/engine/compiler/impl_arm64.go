@@ -4817,6 +4817,7 @@ func (c *arm64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) erro
 	if err != nil {
 		return err
 	}
+	c.markRegisterUsed(baseReg)
 	c.compileMemoryAlignmentCheck(baseReg, targetSizeInBytes)
 
 	resultRegister, err := c.allocateRegister(registerTypeGeneralPurpose)
@@ -4856,6 +4857,7 @@ func (c *arm64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) erro
 
 	c.assembler.SetJumpTargetOnNext(exit)
 
+	c.markRegisterUnused(baseReg)
 	c.markRegisterUnused(exp.register)
 	c.markRegisterUnused(timeout.register)
 

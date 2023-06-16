@@ -52,8 +52,8 @@ func TestThreadsNotEnabled(t *testing.T) {
 	require.EqualError(t, err, "section memory: shared memory requested but threads feature not enabled")
 }
 
-func TestThreadsInterpreter(t *testing.T) {
-	runAllTests(t, threadTests, wazero.NewRuntimeConfigInterpreter().WithCoreFeatures(api.CoreFeaturesV2|experimental.CoreFeaturesThreads))
+func TestThreads(t *testing.T) {
+	runAllTests(t, threadTests, wazero.NewRuntimeConfig().WithCoreFeatures(api.CoreFeaturesV2|experimental.CoreFeaturesThreads))
 }
 
 func incrementGuardedByMutex(t *testing.T, r wazero.Runtime) {
@@ -93,6 +93,10 @@ func incrementGuardedByMutex(t *testing.T, r wazero.Runtime) {
 			require.NoError(t, err)
 
 			hammer.NewHammer(t, P, 30000).Run(func(name string) {
+				b, _ := mod.Memory().ReadUint32Le(0)
+				if b == 1 {
+					println("foo")
+				}
 				_, err := mod.ExportedFunction(tt.fn).Call(testCtx)
 				require.NoError(t, err)
 			}, func() {})
