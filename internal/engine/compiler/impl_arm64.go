@@ -4716,9 +4716,7 @@ func (c *arm64Compiler) compileAtomicRMWCmpxchg(o *wazeroir.UnionOperation) erro
 }
 
 func (c *arm64Compiler) compileAtomicRMW8Cmpxchg(o *wazeroir.UnionOperation) error {
-	var (
-		vt runtimeValueType
-	)
+	var vt runtimeValueType
 
 	unsignedType := wazeroir.UnsignedType(o.B1)
 	offset := uint32(o.U2)
@@ -4733,9 +4731,7 @@ func (c *arm64Compiler) compileAtomicRMW8Cmpxchg(o *wazeroir.UnionOperation) err
 }
 
 func (c *arm64Compiler) compileAtomicRMW16Cmpxchg(o *wazeroir.UnionOperation) error {
-	var (
-		vt runtimeValueType
-	)
+	var vt runtimeValueType
 
 	unsignedType := wazeroir.UnsignedType(o.B1)
 	offset := uint32(o.U2)
@@ -4754,14 +4750,24 @@ func (c *arm64Compiler) compileAtomicRMWCmpxchgImpl(inst asm.Instruction, offset
 	if err != nil {
 		return err
 	}
+	c.markRegisterUsed(repl.register)
 	// CAS instruction loads the old value into the register with the comparison value.
 	exp, err := c.popValueOnRegister()
 	if err != nil {
 		return err
 	}
+	if isZeroRegister(exp.register) {
+		// exp is also used to load, so if it's set to the zero register we need to move to a
+		// loadable register.
+		reg, err := c.allocateRegister(registerTypeGeneralPurpose)
+		if err != nil {
+			return err
+		}
+		c.assembler.CompileRegisterToRegister(arm64.MOVD, arm64.RegRZR, reg)
+		exp.register = reg
+	}
 	// Mark temporarily used as compileMemoryAccessOffsetSetup might try allocating register.
 	c.markRegisterUsed(exp.register)
-	c.markRegisterUsed(repl.register)
 
 	addrReg, err := c.compileMemoryAccessBaseSetup(offsetArg, targetSizeInBytes)
 	if err != nil {

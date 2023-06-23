@@ -93,10 +93,6 @@ func incrementGuardedByMutex(t *testing.T, r wazero.Runtime) {
 			require.NoError(t, err)
 
 			hammer.NewHammer(t, P, 30000).Run(func(name string) {
-				b, _ := mod.Memory().ReadUint32Le(0)
-				if b == 1 {
-					println("foo")
-				}
 				_, err := mod.ExportedFunction(tt.fn).Call(testCtx)
 				require.NoError(t, err)
 			}, func() {})
