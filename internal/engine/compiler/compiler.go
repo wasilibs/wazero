@@ -329,6 +329,8 @@ type compiler interface {
 	compileAtomicMemoryWait(o *wazeroir.UnionOperation) error
 	// compileAtomicMemoryNotify adds instructions to perform wazeroir.NewOperationAtomicMemoryNotify.
 	compileAtomicMemoryNotify(o *wazeroir.UnionOperation) error
+	// compileAtomicFence adds instructions to perform wazeroir.NewOperationAtomicFence
+	compileAtomicFence(o *wazeroir.UnionOperation) error
 
 	// compileBuiltinFunctionCheckExitCode adds instructions to perform wazeroir.OperationBuiltinFunctionCheckExitCode.
 	compileBuiltinFunctionCheckExitCode() error

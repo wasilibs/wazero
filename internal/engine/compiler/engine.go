@@ -1601,6 +1601,8 @@ func compileWasmFunction(buf asm.Buffer, cmp compiler, ir *wazeroir.CompilationR
 			err = cmp.compileAtomicMemoryWait(op)
 		case wazeroir.OperationKindAtomicMemoryNotify:
 			err = cmp.compileAtomicMemoryNotify(op)
+		case wazeroir.OperationKindAtomicFence:
+			err = cmp.compileAtomicFence(op)
 		default:
 			err = errors.New("unsupported")
 		}

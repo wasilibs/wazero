@@ -1015,6 +1015,9 @@ const (
 	// CASALB is the CASALB instruction https://developer.arm.com/documentation/ddi0602/2023-03/Base-Instructions/CASB--CASAB--CASALB--CASLB--Compare-and-swap-byte-in-memory-
 	CASALB
 
+	// DMB is the DMB instruction for inner-sharable domain https://developer.arm.com/documentation/ddi0596/2020-12/Base-Instructions/DMB--Data-Memory-Barrier-
+	DMB
+
 	// UDF is the UDF instruction https://developer.arm.com/documentation/ddi0596/2021-12/Base-Instructions/UDF--Permanently-Undefined-?lang=en
 	UDF
 

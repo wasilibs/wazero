@@ -779,6 +779,14 @@ func (a *AssemblerImpl) encodeNoneToNone(buf asm.Buffer, n *nodeImpl) error {
 	case UDF:
 		buf.Append4Bytes(0, 0, 0, 0)
 		return nil
+	case DMB:
+		buf.Append4Bytes(
+			0b10111111,
+			0b00111011,
+			0b00000011,
+			0b11010101,
+		)
+		return nil
 	case NOP:
 		return nil
 	default:

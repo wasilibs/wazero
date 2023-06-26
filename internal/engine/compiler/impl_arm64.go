@@ -4914,3 +4914,8 @@ func (c *arm64Compiler) compileAtomicMemoryNotify(o *wazeroir.UnionOperation) er
 	c.compileReservedMemoryRegisterInitialization()
 	return nil
 }
+
+func (c *arm64Compiler) compileAtomicFence(_ *wazeroir.UnionOperation) error {
+	c.assembler.CompileStandAlone(arm64.DMB)
+	return nil
+}
