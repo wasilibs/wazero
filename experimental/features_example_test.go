@@ -27,12 +27,8 @@ func ExampleCoreFeaturesThreads() {
 	// Use a default context
 	ctx := context.Background()
 
-	// Threads support is currently only supported with interpreter, so the config
-	// must explicitly specify it.
-	cfg := wazero.NewRuntimeConfig()
-
 	// Threads support must be enabled explicitly in addition to standard V2 features.
-	cfg = cfg.WithCoreFeatures(api.CoreFeaturesV2 | experimental.CoreFeaturesThreads)
+	cfg := wazero.NewRuntimeConfig().WithCoreFeatures(api.CoreFeaturesV2 | experimental.CoreFeaturesThreads)
 
 	r := wazero.NewRuntimeWithConfig(ctx, cfg)
 	defer r.Close(ctx)
