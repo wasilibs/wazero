@@ -1130,6 +1130,10 @@ func InstructionName(i asm.Instruction) string {
 		return "ANDIMM64"
 	case ANDW:
 		return "ANDW"
+	case ANDS:
+		return "ANDS"
+	case ANDSW:
+		return "ANDSW"
 	case ASR:
 		return "ASR"
 	case ASRW:
@@ -1310,6 +1314,10 @@ func InstructionName(i asm.Instruction) string {
 		return "ORR"
 	case ORRW:
 		return "ORRW"
+	case ORN:
+		return "ORN"
+	case ORNW:
+		return "ORNW"
 	case RBIT:
 		return "RBIT"
 	case RBITW:
@@ -1542,6 +1550,72 @@ func InstructionName(i asm.Instruction) string {
 		return "FCVTL"
 	case FCVTN:
 		return "FCVTN"
+	case LDARD:
+		return "LDARD"
+	case LDARW:
+		return "LDARW"
+	case LDARH:
+		return "LDARH"
+	case LDARB:
+		return "LDARB"
+	case STLRD:
+		return "STLRD"
+	case STLRW:
+		return "STLRW"
+	case STLRH:
+		return "STLRH"
+	case STLRB:
+		return "STLRB"
+	case LDADDALD:
+		return "LDADDALD"
+	case LDADDALW:
+		return "LDADDALW"
+	case LDADDALH:
+		return "LDADDALH"
+	case LDADDALB:
+		return "LDADDALB"
+	case LDCLRALD:
+		return "LDCLRALD"
+	case LDCLRALW:
+		return "LDCLRALW"
+	case LDCLRALH:
+		return "LDCLRALH"
+	case LDCLRALB:
+		return "LDCLRALB"
+	case LDSETALD:
+		return "LDSETALD"
+	case LDSETALW:
+		return "LDSETALW"
+	case LDSETALH:
+		return "LDSETALH"
+	case LDSETALB:
+		return "LDSETALB"
+	case LDEORALD:
+		return "LDEORALD"
+	case LDEORALW:
+		return "LDEORALW"
+	case LDEORALH:
+		return "LDEORALH"
+	case LDEORALB:
+		return "LDEORALB"
+	case SWPALD:
+		return "SWPALD"
+	case SWPALW:
+		return "SWPALW"
+	case SWPALH:
+		return "SWPALH"
+	case SWPALB:
+		return "SWPALB"
+	case CASALD:
+		return "CASALD"
+	case CASALW:
+		return "CASALW"
+	case CASALH:
+		return "CASALH"
+	case CASALB:
+		return "CASALB"
+	case DMB:
+		return "DMB"
 	case FSTRD:
 		return "FSTRD"
 	case FSTRS:
