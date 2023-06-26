@@ -4826,6 +4826,13 @@ func (c *arm64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) erro
 	c.markRegisterUsed(baseReg)
 	c.compileMemoryAlignmentCheck(baseReg, targetSizeInBytes)
 
+	// TODO(anuraaga): Either the shared attribute of memory should be made accessible to assembly for this check or
+	// the assembly below should be removed to have the entire function implemented in Go. Decide which is better
+	// later.
+	if err := c.compileCallGoFunction(nativeCallStatusCodeCallBuiltInFunction, builtinFunctionCheckMemoryShared); err != nil {
+		return err
+	}
+
 	resultRegister, err := c.allocateRegister(registerTypeGeneralPurpose)
 	if err != nil {
 		return err

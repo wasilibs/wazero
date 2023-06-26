@@ -998,6 +998,7 @@ const (
 	builtinFunctionIndexCheckExitCode
 	// builtinFunctionIndexBreakPoint is internal (only for wazero developers). Disabled by default.
 	builtinFunctionIndexBreakPoint
+	builtinFunctionCheckMemoryShared
 	builtinFunctionMemoryWait
 	builtinFunctionMemoryNotify
 )
@@ -1046,6 +1047,8 @@ entry:
 				ce.builtinFunctionGrowStack(caller.parent.stackPointerCeil)
 			case builtinFunctionIndexTableGrow:
 				ce.builtinFunctionTableGrow(caller.moduleInstance.Tables)
+			case builtinFunctionCheckMemoryShared:
+				ce.builtinFunctionCheckMemoryShared(caller.moduleInstance.MemoryInstance)
 			case builtinFunctionMemoryWait:
 				ce.builtinFunctionMemoryWait(caller.moduleInstance.MemoryInstance)
 			case builtinFunctionMemoryNotify:
@@ -1123,6 +1126,12 @@ func (ce *callEngine) builtinFunctionTableGrow(tables []*wasm.TableInstance) {
 	ref := ce.popValue()
 	res := table.Grow(uint32(num), uintptr(ref))
 	ce.pushValue(uint64(res))
+}
+
+func (ce *callEngine) builtinFunctionCheckMemoryShared(mem *wasm.MemoryInstance) {
+	if !mem.Shared {
+		panic(wasmruntime.ErrRuntimeExpectedSharedMemory)
+	}
 }
 
 func (ce *callEngine) builtinFunctionMemoryWait(mem *wasm.MemoryInstance) {
