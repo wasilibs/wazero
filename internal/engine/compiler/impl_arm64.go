@@ -4789,7 +4789,7 @@ func (c *arm64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) erro
 
 	var (
 		loadInst          asm.Instruction
-		cmpInst           asm.Instruction
+		vt                runtimeValueType
 		targetSizeInBytes int64
 	)
 
@@ -4799,11 +4799,11 @@ func (c *arm64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) erro
 	switch unsignedType {
 	case wazeroir.UnsignedTypeI32:
 		loadInst = arm64.LDARW
-		cmpInst = arm64.CMPW
+		vt = runtimeValueTypeI32
 		targetSizeInBytes = 32 / 8
 	case wazeroir.UnsignedTypeI64:
 		loadInst = arm64.LDARD
-		cmpInst = arm64.CMP
+		vt = runtimeValueTypeI64
 		targetSizeInBytes = 64 / 8
 	}
 
@@ -4826,34 +4826,23 @@ func (c *arm64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) erro
 	c.markRegisterUsed(baseReg)
 	c.compileMemoryAlignmentCheck(baseReg, targetSizeInBytes)
 
-	// TODO(anuraaga): Either the shared attribute of memory should be made accessible to assembly for this check or
-	// the assembly below should be removed to have the entire function implemented in Go. Decide which is better
-	// later.
-	if err := c.compileCallGoFunction(nativeCallStatusCodeCallBuiltInFunction, builtinFunctionCheckMemoryShared); err != nil {
-		return err
-	}
-
 	resultRegister, err := c.allocateRegister(registerTypeGeneralPurpose)
 	if err != nil {
 		return err
 	}
 	c.assembler.CompileMemoryWithRegisterSourceToRegister(loadInst, baseReg, resultRegister)
 
-	c.assembler.CompileTwoRegistersToNone(cmpInst, resultRegister, exp.register)
-	matched := c.assembler.CompileJump(arm64.BCONDEQ)
-
-	c.assembler.CompileConstToRegister(arm64.MOVW, 1, resultRegister)
-	exit := c.assembler.CompileJump(arm64.B)
-
-	c.assembler.SetJumpTargetOnNext(matched)
-
-	// Push address and timeout back to read in Go
+	// Push address, values, and timeout back to read in Go
 	c.pushRuntimeValueLocationOnRegister(baseReg, runtimeValueTypeI64)
+	c.pushRuntimeValueLocationOnRegister(exp.register, vt)
+	c.pushRuntimeValueLocationOnRegister(resultRegister, vt)
 	c.pushRuntimeValueLocationOnRegister(timeout.register, runtimeValueTypeI64)
 	if err := c.compileCallGoFunction(nativeCallStatusCodeCallBuiltInFunction, builtinFunctionMemoryWait); err != nil {
 		return err
 	}
-	// Address and timeout consumed in Go
+	// Address, values and timeout consumed in Go
+	c.locationStack.pop()
+	c.locationStack.pop()
 	c.locationStack.pop()
 	c.locationStack.pop()
 
@@ -4861,20 +4850,10 @@ func (c *arm64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) erro
 	v := c.locationStack.pushRuntimeValueLocationOnStack()
 	v.valueType = runtimeValueTypeI32
 
-	// Load the result from Go into a register to copy into the final result register.
-	goResultReg, err := c.popValueOnRegister()
-	if err != nil {
-		return err
-	}
-	c.assembler.CompileRegisterToRegister(arm64.MOVW, goResultReg.register, resultRegister)
-
-	c.assembler.SetJumpTargetOnNext(exit)
-
 	c.markRegisterUnused(baseReg)
 	c.markRegisterUnused(exp.register)
 	c.markRegisterUnused(timeout.register)
-
-	c.pushRuntimeValueLocationOnRegister(resultRegister, runtimeValueTypeI32)
+	c.markRegisterUnused(resultRegister)
 
 	// After return, we re-initialize reserved registers just like preamble of functions.
 	c.compileReservedStackBasePointerRegisterInitialization()
