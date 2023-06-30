@@ -4504,16 +4504,19 @@ func (c *amd64Compiler) compileConstF64(o *wazeroir.UnionOperation) error {
 	return nil
 }
 
-func (c *amd64Compiler) compileAtomicLoad(_ *wazeroir.UnionOperation) error {
-	return nil
+func (c *amd64Compiler) compileAtomicLoad(o *wazeroir.UnionOperation) error {
+	// Normal load is atomic on amd64 as long as stores use lock.
+	return c.compileLoad(o)
 }
 
-func (c *amd64Compiler) compileAtomicLoad8(_ *wazeroir.UnionOperation) error {
-	return nil
+func (c *amd64Compiler) compileAtomicLoad8(o *wazeroir.UnionOperation) error {
+	// Normal load is atomic on amd64 as long as stores use lock.
+	return c.compileLoad8(o)
 }
 
-func (c *amd64Compiler) compileAtomicLoad16(_ *wazeroir.UnionOperation) error {
-	return nil
+func (c *amd64Compiler) compileAtomicLoad16(o *wazeroir.UnionOperation) error {
+	// Normal load is atomic on amd64 as long as stores use lock.
+	return c.compileLoad16(o)
 }
 
 func (c *amd64Compiler) compileAtomicStore(o *wazeroir.UnionOperation) error {
