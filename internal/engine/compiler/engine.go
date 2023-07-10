@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/tetratelabs/wazero/api"
@@ -135,6 +136,8 @@ type (
 		stackIterator stackIterator
 
 		ensureTermination bool
+
+		mux sync.Mutex
 	}
 
 	// moduleContext holds the per-function call specific module information.
@@ -1102,6 +1105,9 @@ func (ce *callEngine) builtinFunctionGrowStack(stackPointerCeil uint64) {
 }
 
 func (ce *callEngine) builtinFunctionMemoryGrow(mem *wasm.MemoryInstance) {
+	ce.mux.Lock()
+	defer ce.mux.Unlock()
+
 	newPages := ce.popValue()
 
 	if res, ok := mem.Grow(uint32(newPages)); !ok {
@@ -1112,8 +1118,8 @@ func (ce *callEngine) builtinFunctionMemoryGrow(mem *wasm.MemoryInstance) {
 
 	// Update the moduleContext fields as they become stale after the update ^^.
 	bufSliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&mem.Buffer))
-	ce.moduleContext.memorySliceLen = uint64(bufSliceHeader.Len)
-	ce.moduleContext.memoryElement0Address = bufSliceHeader.Data
+	atomic.StoreUint64(&ce.moduleContext.memorySliceLen, uint64(bufSliceHeader.Len))
+	atomic.StoreUintptr(&ce.moduleContext.memoryElement0Address, bufSliceHeader.Data)
 }
 
 func (ce *callEngine) builtinFunctionTableGrow(tables []*wasm.TableInstance) {

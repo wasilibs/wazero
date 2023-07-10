@@ -4,9 +4,11 @@ import (
 	"container/list"
 	"encoding/binary"
 	"fmt"
+	"github.com/tetratelabs/wazero/internal/platform"
 	"math"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -49,19 +51,54 @@ type MemoryInstance struct {
 	// waiters implements atomic wait and notify. It is implemented similarly to golang.org/x/sync/semaphore,
 	// with a fixed weight of 1 and no spurious notifications.
 	waiters map[uint32]*list.List
+
+	closed bool
 }
 
 // NewMemoryInstance creates a new instance based on the parameters in the SectionIDMemory.
 func NewMemoryInstance(memSec *Memory) *MemoryInstance {
 	min := MemoryPagesToBytesNum(memSec.Min)
 	capacity := MemoryPagesToBytesNum(memSec.Cap)
+
+	var buffer []byte
+	var cap uint32
+	if memSec.IsShared {
+		// TODO(anuraaga): Only use Mmap with compiler backend
+		max := MemoryPagesToBytesNum(memSec.Max)
+		b, err := platform.MmapMemory(int(max))
+		if err != nil {
+			panic(err)
+		}
+		sp := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+		sp.Len = int(MemoryPagesToBytesNum(memSec.Min))
+		buffer = b
+		cap = memSec.Max
+	} else {
+		buffer = make([]byte, min, capacity)
+		cap = memSec.Cap
+	}
+
 	return &MemoryInstance{
-		Buffer: make([]byte, min, capacity),
+		Buffer: buffer,
 		Min:    memSec.Min,
-		Cap:    memSec.Cap,
+		Cap:    cap,
 		Max:    memSec.Max,
 		Shared: memSec.IsShared,
 	}
+}
+
+func (m *MemoryInstance) Close() error {
+	m.Mux.Lock()
+	defer m.Mux.Unlock()
+
+	if m.closed {
+		return nil
+	}
+	m.closed = true
+	if m.Shared {
+		return platform.MunmapCodeSegment(m.Buffer)
+	}
+	return nil
 }
 
 // Definition implements the same method as documented on api.Memory.
@@ -208,7 +245,11 @@ func (m *MemoryInstance) Grow(delta uint32) (result uint32, ok bool) {
 		return currentPages, true
 	} else { // We already have the capacity we need.
 		sp := (*reflect.SliceHeader)(unsafe.Pointer(&m.Buffer))
-		sp.Len = int(MemoryPagesToBytesNum(newPages))
+		if math.MaxInt == math.MaxInt32 {
+			atomic.StoreInt32((*int32)(unsafe.Pointer(&sp.Len)), int32(MemoryPagesToBytesNum(newPages)))
+		} else {
+			atomic.StoreInt64((*int64)(unsafe.Pointer(&sp.Len)), int64(MemoryPagesToBytesNum(newPages)))
+		}
 		return currentPages, true
 	}
 }

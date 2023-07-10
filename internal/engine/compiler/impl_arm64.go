@@ -2853,9 +2853,7 @@ func (c *arm64Compiler) compileMemoryAccessOffsetSetup(offsetArg uint32, targetS
 	}
 
 	// "arm64ReservedRegisterForTemporary = len(memory.Buffer)"
-	c.assembler.CompileMemoryToRegister(arm64.LDRD,
-		arm64ReservedRegisterForCallEngine, callEngineModuleContextMemorySliceLenOffset,
-		arm64ReservedRegisterForTemporary)
+	c.compileLoadMemoryBufferLen(arm64ReservedRegisterForTemporary)
 
 	// Check if offsetRegister(= base+offsetArg+targetSizeInBytes) > len(memory.Buffer).
 	c.assembler.CompileTwoRegistersToNone(arm64.CMP, arm64ReservedRegisterForTemporary, offsetRegister)
@@ -2863,6 +2861,11 @@ func (c *arm64Compiler) compileMemoryAccessOffsetSetup(offsetArg uint32, targetS
 
 	// If offsetRegister(= base+offsetArg+targetSizeInBytes) exceeds the memory length,
 	//  we exit the function with nativeCallStatusCodeMemoryOutOfBounds.
+	reg, err := c.allocateRegister(registerTypeGeneralPurpose)
+	if err != nil {
+		return 0, err
+	}
+	c.assembler.CompileRegisterToRegister(arm64.MOVD, arm64ReservedRegisterForTemporary, reg)
 	c.compileExitFromNativeCode(nativeCallStatusCodeMemoryOutOfBounds)
 
 	// Otherwise, we subtract targetSizeInBytes from offsetRegister.
@@ -2936,11 +2939,7 @@ func (c *arm64Compiler) compileMemorySize() error {
 	}
 
 	// "reg = len(memory.Buffer)"
-	c.assembler.CompileMemoryToRegister(
-		arm64.LDRD,
-		arm64ReservedRegisterForCallEngine, callEngineModuleContextMemorySliceLenOffset,
-		reg,
-	)
+	c.compileLoadMemoryBufferLen(reg)
 
 	// memory.size loads the page size of memory, so we have to divide by the page size.
 	// "reg = reg >> wasm.MemoryPageSizeInBits (== reg / wasm.MemoryPageSize) "
@@ -3185,9 +3184,7 @@ func (c *arm64Compiler) compileInitImpl(isTable bool, index, tableIndex uint32) 
 			tableInstanceAddressReg, tableInstanceTableLenOffset,
 			arm64ReservedRegisterForTemporary)
 	} else {
-		c.assembler.CompileMemoryToRegister(arm64.LDRD,
-			arm64ReservedRegisterForCallEngine, callEngineModuleContextMemorySliceLenOffset,
-			arm64ReservedRegisterForTemporary)
+		c.compileLoadMemoryBufferLen(arm64ReservedRegisterForTemporary)
 	}
 
 	c.assembler.CompileTwoRegistersToNone(arm64.CMP, arm64ReservedRegisterForTemporary, destinationOffset.register)
@@ -3375,9 +3372,7 @@ func (c *arm64Compiler) compileCopyImpl(isTable bool, srcTableIndex, dstTableInd
 			arm64ReservedRegisterForTemporary)
 	} else {
 		// arm64ReservedRegisterForTemporary = len(memoryInst.Buffer).
-		c.assembler.CompileMemoryToRegister(arm64.LDRD,
-			arm64ReservedRegisterForCallEngine, callEngineModuleContextMemorySliceLenOffset,
-			arm64ReservedRegisterForTemporary)
+		c.compileLoadMemoryBufferLen(arm64ReservedRegisterForTemporary)
 	}
 
 	// Check memory len >= sourceOffset.
@@ -3627,9 +3622,7 @@ func (c *arm64Compiler) compileFillImpl(isTable bool, tableIndex uint32) error {
 			arm64ReservedRegisterForTemporary)
 	} else {
 		// arm64ReservedRegisterForTemporary = len(memoryInst.Buffer).
-		c.assembler.CompileMemoryToRegister(arm64.LDRD,
-			arm64ReservedRegisterForCallEngine, callEngineModuleContextMemorySliceLenOffset,
-			arm64ReservedRegisterForTemporary)
+		c.compileLoadMemoryBufferLen(arm64ReservedRegisterForTemporary)
 	}
 
 	// Check  len >= destinationOffset.
@@ -4110,6 +4103,14 @@ func (c *arm64Compiler) allocateRegister(t registerType) (reg asm.Register, err 
 	return
 }
 
+func (c *arm64Compiler) compileLoadMemoryBufferLen(destReg asm.Register) {
+	// destReg = ce.moduleContext.MemoryInstance (pointer)
+	c.assembler.CompileMemoryToRegister(arm64.LDRD, arm64ReservedRegisterForCallEngine, callEngineModuleContextMemoryInstanceOffset, destReg)
+	// destReg = len(mem.Buffer)
+	c.assembler.CompileConstToRegister(arm64.ADD, memoryInstanceBufferLenOffset, destReg)
+	c.assembler.CompileMemoryWithRegisterSourceToRegister(arm64.LDARD, destReg, destReg)
+}
+
 // compileReleaseAllRegistersToStack adds instructions to store all the values located on
 // either general purpose or conditional registers onto the memory stack.
 // See releaseRegisterToStack.
@@ -4265,17 +4266,13 @@ func (c *arm64Compiler) compileModuleContextInitialization() error {
 		// Next, we write the memory length into ce.MemorySliceLen.
 		//
 		// "tmpY = [tmpX + memoryInstanceBufferLenOffset] (== len(memory.Buffer))"
-		c.assembler.CompileMemoryToRegister(
-			arm64.LDRD,
-			tmpX, memoryInstanceBufferLenOffset,
-			tmpY,
-		)
+		c.assembler.CompileRegisterToRegister(arm64.MOVD, tmpX, tmpY)
+		c.assembler.CompileConstToRegister(arm64.ADD, memoryInstanceBufferLenOffset, tmpY)
+		c.assembler.CompileMemoryWithRegisterSourceToRegister(arm64.LDARD, tmpY, tmpY)
 		// "ce.MemorySliceLen = tmpY".
-		c.assembler.CompileRegisterToMemory(
-			arm64.STRD,
-			tmpY,
-			arm64ReservedRegisterForCallEngine, callEngineModuleContextMemorySliceLenOffset,
-		)
+		c.assembler.CompileRegisterToRegister(arm64.MOVD, arm64ReservedRegisterForCallEngine, arm64ReservedRegisterForTemporary)
+		c.assembler.CompileConstToRegister(arm64.ADD, callEngineModuleContextMemorySliceLenOffset, arm64ReservedRegisterForTemporary)
+		c.assembler.CompileRegisterToMemoryWithRegisterDest(arm64.STLRD, tmpY, arm64ReservedRegisterForTemporary)
 
 		// Finally, we write ce.memoryElement0Address.
 		//
