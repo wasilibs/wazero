@@ -88,6 +88,13 @@ type Assembler interface {
 	// the destination is the constant `value`.
 	CompileMemoryToConst(instruction asm.Instruction, srcBaseReg asm.Register, srcOffset int64, value int64) asm.Node
 
+	// CompileRegisterToMemoryWithLock is the same as CompileRegisterToMemory but with LOCK prefix.
+	CompileRegisterToMemoryWithLock(
+		instruction asm.Instruction,
+		sourceRegister, destinationBaseRegister asm.Register,
+		destinationOffsetConst asm.ConstantValue,
+	)
+
 	// CompileStaticConstToRegister adds an instruction where the source operand is asm.StaticConst located in the
 	// memory and the destination is the dstReg.
 	CompileStaticConstToRegister(instruction asm.Instruction, c *asm.StaticConst, dstReg asm.Register) error

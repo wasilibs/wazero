@@ -4547,6 +4547,55 @@ func (c *amd64Compiler) compileAtomicStore16(o *wazeroir.UnionOperation) error {
 }
 
 func (c *amd64Compiler) compileAtomicRMW(o *wazeroir.UnionOperation) error {
+	var (
+		inst              asm.Instruction
+		targetSizeInBytes int64
+		vt                runtimeValueType
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	op := wazeroir.AtomicArithmeticOp(o.B2)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		targetSizeInBytes = 32 / 8
+		vt = runtimeValueTypeI32
+		switch op {
+		case wazeroir.AtomicArithmeticOpAdd:
+			return c.compileAtomicAddImpl(amd64.XADDL, offset, false, targetSizeInBytes, vt)
+		case wazeroir.AtomicArithmeticOpSub:
+			return c.compileAtomicAddImpl(amd64.XADDL, offset, true, targetSizeInBytes, vt)
+		case wazeroir.AtomicArithmeticOpAnd:
+			inst = amd64.ANDL
+		case wazeroir.AtomicArithmeticOpOr:
+			inst = amd64.ORL
+		case wazeroir.AtomicArithmeticOpXor:
+			inst = amd64.XORL
+		case wazeroir.AtomicArithmeticOpNop:
+			inst = amd64.XCHGL
+		}
+	case wazeroir.UnsignedTypeI64:
+		targetSizeInBytes = 64 / 8
+		vt = runtimeValueTypeI64
+		switch op {
+		case wazeroir.AtomicArithmeticOpAdd:
+			return c.compileAtomicAddImpl(amd64.XADDQ, offset, false, targetSizeInBytes, vt)
+		case wazeroir.AtomicArithmeticOpSub:
+			return c.compileAtomicAddImpl(amd64.XADDQ, offset, true, targetSizeInBytes, vt)
+		case wazeroir.AtomicArithmeticOpAnd:
+			inst = amd64.ANDQ
+		case wazeroir.AtomicArithmeticOpOr:
+			inst = amd64.ORQ
+		case wazeroir.AtomicArithmeticOpXor:
+			inst = amd64.XORQ
+		case wazeroir.AtomicArithmeticOpNop:
+			inst = amd64.NOP
+		}
+	}
+
+	_ = inst
+
 	return nil
 }
 
@@ -4555,6 +4604,28 @@ func (c *amd64Compiler) compileAtomicRMW8(o *wazeroir.UnionOperation) error {
 }
 
 func (c *amd64Compiler) compileAtomicRMW16(o *wazeroir.UnionOperation) error {
+	return nil
+}
+
+func (c *amd64Compiler) compileAtomicAddImpl(inst asm.Instruction, offsetConst uint32, negateArg bool, targetSizeInBytes int64, resultRuntimeValueType runtimeValueType) error {
+	val := c.locationStack.pop()
+	if err := c.compileEnsureOnRegister(val); err != nil {
+		return err
+	}
+
+	reg, err := c.compileMemoryAccessCeilSetup(offsetConst, targetSizeInBytes)
+	if err != nil {
+		return err
+	}
+
+	c.assembler.CompileRegisterToMemoryWithIndex(
+		inst, val.register,
+		amd64ReservedRegisterForMemory, -targetSizeInBytes, reg, 1,
+	)
+
+	c.locationStack.markRegisterUnused(reg)
+	c.locationStack.pushRuntimeValueLocationOnRegister(val.register, resultRuntimeValueType)
+
 	return nil
 }
 

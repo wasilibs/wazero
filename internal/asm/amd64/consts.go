@@ -574,6 +574,15 @@ const (
 	// CVTTPD2DQ is the CVTTPD2DQ instruction https://www.felixcloutier.com/x86/cvttpd2dq
 	CVTTPD2DQ
 
+	// XADDB is the XADD instruction in 8-bit mode https://www.felixcloutier.com/x86/xadd
+	XADDB
+	// XADDW is the XADD instruction in 16-bit mode https://www.felixcloutier.com/x86/xadd
+	XADDW
+	// XADDL is the XADD instruction in 32-bit mode https://www.felixcloutier.com/x86/xadd
+	XADDL
+	// XADDQ is the XADD instruction in 64-bit mode https://www.felixcloutier.com/x86/xadd
+	XADDQ
+
 	// instructionEnd is always placed at the bottom of this iota definition to be used in the test.
 	instructionEnd
 )

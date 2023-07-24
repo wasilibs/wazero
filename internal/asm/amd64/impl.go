@@ -55,6 +55,8 @@ const (
 	// the target node is encoded after this node. False by default means that we Encode all the jumps with jumpTarget
 	// as short jump (i.e. relative signed 8-bit integer offset jump) and try to Encode as small as possible.
 	nodeFlagShortForwardJump
+	// nodeFlagLock indicates the encoded instruction should include the LOCK prefix
+	nodeFlagLock
 )
 
 func (n *nodeImpl) isInitializedForEncoding() bool {
@@ -75,6 +77,10 @@ func (n *nodeImpl) isForwardJump() bool {
 
 func (n *nodeImpl) isForwardShortJump() bool {
 	return n.isForwardJump() && n.flag&nodeFlagShortForwardJump != 0
+}
+
+func (n *nodeImpl) isLock() bool {
+	return n.flag&nodeFlagLock != 0
 }
 
 // AssignJumpTarget implements asm.Node.AssignJumpTarget.
@@ -740,6 +746,19 @@ func (a *AssemblerImpl) CompileRegisterToMemory(
 	n.srcReg = sourceRegister
 	n.dstReg = destinationBaseRegister
 	n.dstConst = destinationOffsetConst
+}
+
+// CompileRegisterToMemoryWithLock implements the same method as documented on asm.AssemblerBase.
+func (a *AssemblerImpl) CompileRegisterToMemoryWithLock(
+	instruction asm.Instruction,
+	sourceRegister, destinationBaseRegister asm.Register,
+	destinationOffsetConst asm.ConstantValue,
+) {
+	n := a.newNode(instruction, operandTypesRegisterToMemory)
+	n.srcReg = sourceRegister
+	n.dstReg = destinationBaseRegister
+	n.dstConst = destinationOffsetConst
+	n.flag |= nodeFlagLock
 }
 
 // CompileJump implements the same method as documented on asm.AssemblerBase.
@@ -1810,26 +1829,6 @@ func (a *AssemblerImpl) encodeRegisterToMemory(buf asm.Buffer, n *nodeImpl) (err
 		// https://wiki.osdev.org/X86-64_Instruction_Encoding#Operand-size_and_address-size_override_prefix
 		mandatoryPrefix = 0x66
 		opcode = []byte{0x89}
-	case XCHGB:
-		// https://www.felixcloutier.com/x86/xchg
-		opcode = []byte{0x86}
-		// 1 byte register operands need default prefix for the following registers.
-		if n.srcReg >= RegSP && n.srcReg <= RegDI {
-			rexPrefix |= rexPrefixDefault
-		}
-	case XCHGW:
-		// https://www.felixcloutier.com/x86/mov
-		// Note: Need 0x66 to indicate that the operand size is 16-bit.
-		// https://wiki.osdev.org/X86-64_Instruction_Encoding#Operand-size_and_address-size_override_prefix
-		mandatoryPrefix = 0x66
-		opcode = []byte{0x87}
-	case XCHGL:
-		// https://www.felixcloutier.com/x86/xchg
-		opcode = []byte{0x87}
-	case XCHGQ:
-		// https://www.felixcloutier.com/x86/mxchg
-		rexPrefix |= rexPrefixW
-		opcode = []byte{0x87}
 	case SARL:
 		// https://www.felixcloutier.com/x86/sal:sar:shl:shr
 		modRM |= 0b00_111_000
@@ -1904,6 +1903,46 @@ func (a *AssemblerImpl) encodeRegisterToMemory(buf asm.Buffer, n *nodeImpl) (err
 		rexPrefix |= rexPrefixW // REX.W
 		opcode = []byte{0x0f, 0x3a, 0x16}
 		needArg = true
+	case XCHGB:
+		// https://www.felixcloutier.com/x86/xchg
+		opcode = []byte{0x86}
+		// 1 byte register operands need default prefix for the following registers.
+		if n.srcReg >= RegSP && n.srcReg <= RegDI {
+			rexPrefix |= rexPrefixDefault
+		}
+	case XCHGW:
+		// https://www.felixcloutier.com/x86/mov
+		// Note: Need 0x66 to indicate that the operand size is 16-bit.
+		// https://wiki.osdev.org/X86-64_Instruction_Encoding#Operand-size_and_address-size_override_prefix
+		mandatoryPrefix = 0x66
+		opcode = []byte{0x87}
+	case XCHGL:
+		// https://www.felixcloutier.com/x86/xchg
+		opcode = []byte{0x87}
+	case XCHGQ:
+		// https://www.felixcloutier.com/x86/mxchg
+		rexPrefix |= rexPrefixW
+		opcode = []byte{0x87}
+	case XADDB:
+		// https://www.felixcloutier.com/x86/xchg
+		opcode = []byte{0x0F, 0xC0}
+		// 1 byte register operands need default prefix for the following registers.
+		if n.srcReg >= RegSP && n.srcReg <= RegDI {
+			rexPrefix |= rexPrefixDefault
+		}
+	case XADDW:
+		// https://www.felixcloutier.com/x86/mov
+		// Note: Need 0x66 to indicate that the operand size is 16-bit.
+		// https://wiki.osdev.org/X86-64_Instruction_Encoding#Operand-size_and_address-size_override_prefix
+		mandatoryPrefix = 0x66
+		opcode = []byte{0x0F, 0xC1}
+	case XADDL:
+		// https://www.felixcloutier.com/x86/xchg
+		opcode = []byte{0x0F, 0xC1}
+	case XADDQ:
+		// https://www.felixcloutier.com/x86/mxchg
+		rexPrefix |= rexPrefixW
+		opcode = []byte{0x0F, 0xC1}
 	default:
 		return errorEncodingUnsupported(n)
 	}
@@ -1925,6 +1964,10 @@ func (a *AssemblerImpl) encodeRegisterToMemory(buf asm.Buffer, n *nodeImpl) (err
 	if mandatoryPrefix != 0 {
 		// https://wiki.osdev.org/X86-64_Instruction_Encoding#Mandatory_prefix
 		code = append(code, mandatoryPrefix)
+	}
+
+	if n.isLock() {
+		code = append(code, lockPrefix)
 	}
 
 	if rexPrefix != rexPrefixNone {
@@ -2751,6 +2794,9 @@ const (
 	rexPrefixX                 = 0b0000_0010 | rexPrefixDefault // REX.X
 	rexPrefixB                 = 0b0000_0001 | rexPrefixDefault // REX.B
 )
+
+// lockPrefix represents the LOCK prefix https://wiki.osdev.org/X86-64_Instruction_Encoding#Legacy_Prefixes
+const lockPrefix = 0xF0
 
 // registerSpecifierPosition represents the position in the instruction bytes where an operand register is placed.
 type registerSpecifierPosition byte
