@@ -1810,6 +1810,26 @@ func (a *AssemblerImpl) encodeRegisterToMemory(buf asm.Buffer, n *nodeImpl) (err
 		// https://wiki.osdev.org/X86-64_Instruction_Encoding#Operand-size_and_address-size_override_prefix
 		mandatoryPrefix = 0x66
 		opcode = []byte{0x89}
+	case XCHGB:
+		// https://www.felixcloutier.com/x86/xchg
+		opcode = []byte{0x86}
+		// 1 byte register operands need default prefix for the following registers.
+		if n.srcReg >= RegSP && n.srcReg <= RegDI {
+			rexPrefix |= rexPrefixDefault
+		}
+	case XCHGW:
+		// https://www.felixcloutier.com/x86/mov
+		// Note: Need 0x66 to indicate that the operand size is 16-bit.
+		// https://wiki.osdev.org/X86-64_Instruction_Encoding#Operand-size_and_address-size_override_prefix
+		mandatoryPrefix = 0x66
+		opcode = []byte{0x87}
+	case XCHGL:
+		// https://www.felixcloutier.com/x86/xchg
+		opcode = []byte{0x87}
+	case XCHGQ:
+		// https://www.felixcloutier.com/x86/mxchg
+		rexPrefix |= rexPrefixW
+		opcode = []byte{0x87}
 	case SARL:
 		// https://www.felixcloutier.com/x86/sal:sar:shl:shr
 		modRM |= 0b00_111_000

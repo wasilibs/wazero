@@ -311,6 +311,12 @@ const (
 	XORQ
 	// XCHGQ is the XCHG instruction in 64-bit mode. https://www.felixcloutier.com/x86/xchg
 	XCHGQ
+	// XCHGW is the XCHG instruction in 32-bit mode. https://www.felixcloutier.com/x86/xchg
+	XCHGW
+	// XCHGL is the XCHG instruction in 16-bit mode. https://www.felixcloutier.com/x86/xchg
+	XCHGL
+	// XCHGB is the XCHG instruction in 8-bit mode. https://www.felixcloutier.com/x86/xchg
+	XCHGB
 	// RET is the RET instruction. https://www.felixcloutier.com/x86/ret
 	RET
 	// JMP is the JMP instruction. https://www.felixcloutier.com/x86/jmp

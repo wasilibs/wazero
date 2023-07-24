@@ -4520,15 +4520,30 @@ func (c *amd64Compiler) compileAtomicLoad16(o *wazeroir.UnionOperation) error {
 }
 
 func (c *amd64Compiler) compileAtomicStore(o *wazeroir.UnionOperation) error {
-	return nil
+	var inst asm.Instruction
+	var targetSizeInByte int64
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		inst = amd64.XCHGL
+		targetSizeInByte = 32 / 8
+	case wazeroir.UnsignedTypeI64:
+		inst = amd64.XCHGQ
+		targetSizeInByte = 64 / 8
+	}
+	// Atomic store behaves the same as normal one but using the XCHG instruction.
+	return c.compileStoreImpl(offset, inst, targetSizeInByte)
 }
 
 func (c *amd64Compiler) compileAtomicStore8(o *wazeroir.UnionOperation) error {
-	return nil
+	// Atomic store behaves the same as normal one but using the XCHG instruction.
+	return c.compileStoreImpl(uint32(o.U2), amd64.XCHGB, 1)
 }
 
 func (c *amd64Compiler) compileAtomicStore16(o *wazeroir.UnionOperation) error {
-	return nil
+	// Atomic store behaves the same as normal one but using the XCHG instruction.
+	return c.compileStoreImpl(uint32(o.U2), amd64.XCHGW, 16/8)
 }
 
 func (c *amd64Compiler) compileAtomicRMW(o *wazeroir.UnionOperation) error {
