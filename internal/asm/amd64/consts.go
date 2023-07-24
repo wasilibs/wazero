@@ -199,6 +199,12 @@ const (
 	MULSS
 	// NEGQ is the NEG instruction in 64-bit mode. https://www.felixcloutier.com/x86/neg
 	NEGQ
+	// NEGL is the NEG instruction in 32-bit mode. https://www.felixcloutier.com/x86/neg
+	NEGL
+	// NEGW is the NEG instruction in 16-bit mode. https://www.felixcloutier.com/x86/neg
+	NEGW
+	// NEGB is the NEG instruction in 8-bit mode. https://www.felixcloutier.com/x86/neg
+	NEGB
 	// ORL is the OR instruction in 32-bit mode. https://www.felixcloutier.com/x86/or
 	ORL
 	// ORPD is the ORPD instruction. https://www.felixcloutier.com/x86/orpd

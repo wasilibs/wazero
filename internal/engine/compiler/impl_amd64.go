@@ -4600,10 +4600,76 @@ func (c *amd64Compiler) compileAtomicRMW(o *wazeroir.UnionOperation) error {
 }
 
 func (c *amd64Compiler) compileAtomicRMW8(o *wazeroir.UnionOperation) error {
+	var (
+		inst asm.Instruction
+		vt   runtimeValueType
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	op := wazeroir.AtomicArithmeticOp(o.B2)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		vt = runtimeValueTypeI64
+	}
+
+	switch op {
+	case wazeroir.AtomicArithmeticOpAdd:
+		return c.compileAtomicAddImpl(amd64.XADDB, offset, false, 1, vt)
+	case wazeroir.AtomicArithmeticOpSub:
+		return c.compileAtomicAddImpl(amd64.XADDB, offset, true, 1, vt)
+	case wazeroir.AtomicArithmeticOpAnd:
+		//inst = arm64.LDCLRALB
+	case wazeroir.AtomicArithmeticOpOr:
+		//inst = arm64.LDSETALB
+	case wazeroir.AtomicArithmeticOpXor:
+		//inst = arm64.LDEORALB
+	case wazeroir.AtomicArithmeticOpNop:
+		//inst = arm64.SWPALB
+	}
+
+	_ = inst
+
 	return nil
 }
 
 func (c *amd64Compiler) compileAtomicRMW16(o *wazeroir.UnionOperation) error {
+	var (
+		inst asm.Instruction
+		vt   runtimeValueType
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	op := wazeroir.AtomicArithmeticOp(o.B2)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		vt = runtimeValueTypeI64
+	}
+
+	switch op {
+	case wazeroir.AtomicArithmeticOpAdd:
+		return c.compileAtomicAddImpl(amd64.XADDW, offset, false, 16/8, vt)
+	case wazeroir.AtomicArithmeticOpSub:
+		return c.compileAtomicAddImpl(amd64.XADDW, offset, true, 16/8, vt)
+	case wazeroir.AtomicArithmeticOpAnd:
+		//inst = arm64.LDCLRALB
+	case wazeroir.AtomicArithmeticOpOr:
+		//inst = arm64.LDSETALB
+	case wazeroir.AtomicArithmeticOpXor:
+		//inst = arm64.LDEORALB
+	case wazeroir.AtomicArithmeticOpNop:
+		//inst = arm64.SWPALB
+	}
+
+	_ = inst
+
 	return nil
 }
 
@@ -4611,6 +4677,21 @@ func (c *amd64Compiler) compileAtomicAddImpl(inst asm.Instruction, offsetConst u
 	val := c.locationStack.pop()
 	if err := c.compileEnsureOnRegister(val); err != nil {
 		return err
+	}
+
+	if negateArg {
+		var negArg asm.Instruction
+		switch targetSizeInBytes {
+		case 1:
+			negArg = amd64.NEGB
+		case 2:
+			negArg = amd64.NEGW
+		case 4:
+			negArg = amd64.NEGL
+		case 8:
+			negArg = amd64.NEGQ
+		}
+		c.assembler.CompileNoneToRegister(negArg, val.register)
 	}
 
 	reg, err := c.compileMemoryAccessCeilSetup(offsetConst, targetSizeInBytes)
@@ -4622,6 +4703,11 @@ func (c *amd64Compiler) compileAtomicAddImpl(inst asm.Instruction, offsetConst u
 		inst, val.register,
 		amd64ReservedRegisterForMemory, -targetSizeInBytes, reg, 1,
 	)
+
+	if targetSizeInBytes < 4 {
+		mask := (1 << (8 * targetSizeInBytes)) - 1
+		c.assembler.CompileConstToRegister(amd64.ANDQ, int64(mask), val.register)
+	}
 
 	c.locationStack.markRegisterUnused(reg)
 	c.locationStack.pushRuntimeValueLocationOnRegister(val.register, resultRuntimeValueType)
