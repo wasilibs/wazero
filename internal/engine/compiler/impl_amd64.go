@@ -4573,7 +4573,7 @@ func (c *amd64Compiler) compileAtomicRMW(o *wazeroir.UnionOperation) error {
 		case wazeroir.AtomicArithmeticOpXor:
 			inst = amd64.XORL
 		case wazeroir.AtomicArithmeticOpNop:
-			inst = amd64.XCHGL
+			return c.compileAtomicXchgImpl(amd64.XCHGL, offset, targetSizeInBytes, vt)
 		}
 	case wazeroir.UnsignedTypeI64:
 		targetSizeInBytes = 64 / 8
@@ -4590,7 +4590,7 @@ func (c *amd64Compiler) compileAtomicRMW(o *wazeroir.UnionOperation) error {
 		case wazeroir.AtomicArithmeticOpXor:
 			inst = amd64.XORQ
 		case wazeroir.AtomicArithmeticOpNop:
-			inst = amd64.NOP
+			return c.compileAtomicXchgImpl(amd64.XCHGQ, offset, targetSizeInBytes, vt)
 		}
 	}
 
@@ -4628,7 +4628,7 @@ func (c *amd64Compiler) compileAtomicRMW8(o *wazeroir.UnionOperation) error {
 	case wazeroir.AtomicArithmeticOpXor:
 		//inst = arm64.LDEORALB
 	case wazeroir.AtomicArithmeticOpNop:
-		//inst = arm64.SWPALB
+		return c.compileAtomicXchgImpl(amd64.XCHGB, offset, 1, vt)
 	}
 
 	_ = inst
@@ -4665,7 +4665,7 @@ func (c *amd64Compiler) compileAtomicRMW16(o *wazeroir.UnionOperation) error {
 	case wazeroir.AtomicArithmeticOpXor:
 		//inst = arm64.LDEORALB
 	case wazeroir.AtomicArithmeticOpNop:
-		//inst = arm64.SWPALB
+		return c.compileAtomicXchgImpl(amd64.XCHGW, offset, 16/8, vt)
 	}
 
 	_ = inst
@@ -4692,6 +4692,33 @@ func (c *amd64Compiler) compileAtomicAddImpl(inst asm.Instruction, offsetConst u
 			negArg = amd64.NEGQ
 		}
 		c.assembler.CompileNoneToRegister(negArg, val.register)
+	}
+
+	reg, err := c.compileMemoryAccessCeilSetup(offsetConst, targetSizeInBytes)
+	if err != nil {
+		return err
+	}
+
+	c.assembler.CompileRegisterToMemoryWithIndex(
+		inst, val.register,
+		amd64ReservedRegisterForMemory, -targetSizeInBytes, reg, 1,
+	)
+
+	if targetSizeInBytes < 4 {
+		mask := (1 << (8 * targetSizeInBytes)) - 1
+		c.assembler.CompileConstToRegister(amd64.ANDQ, int64(mask), val.register)
+	}
+
+	c.locationStack.markRegisterUnused(reg)
+	c.locationStack.pushRuntimeValueLocationOnRegister(val.register, resultRuntimeValueType)
+
+	return nil
+}
+
+func (c *amd64Compiler) compileAtomicXchgImpl(inst asm.Instruction, offsetConst uint32, targetSizeInBytes int64, resultRuntimeValueType runtimeValueType) error {
+	val := c.locationStack.pop()
+	if err := c.compileEnsureOnRegister(val); err != nil {
+		return err
 	}
 
 	reg, err := c.compileMemoryAccessCeilSetup(offsetConst, targetSizeInBytes)
