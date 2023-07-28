@@ -4594,9 +4594,7 @@ func (c *amd64Compiler) compileAtomicRMW(o *wazeroir.UnionOperation) error {
 		}
 	}
 
-	_ = inst
-
-	return nil
+	return c.compileAtomicRMWCASLoopImpl(inst, offset, targetSizeInBytes, vt)
 }
 
 func (c *amd64Compiler) compileAtomicRMW8(o *wazeroir.UnionOperation) error {
@@ -4622,18 +4620,16 @@ func (c *amd64Compiler) compileAtomicRMW8(o *wazeroir.UnionOperation) error {
 	case wazeroir.AtomicArithmeticOpSub:
 		return c.compileAtomicAddImpl(amd64.XADDB, offset, true, 1, vt)
 	case wazeroir.AtomicArithmeticOpAnd:
-		//inst = arm64.LDCLRALB
+		inst = amd64.ANDL
 	case wazeroir.AtomicArithmeticOpOr:
-		//inst = arm64.LDSETALB
+		inst = amd64.ORL
 	case wazeroir.AtomicArithmeticOpXor:
-		//inst = arm64.LDEORALB
+		inst = amd64.XORL
 	case wazeroir.AtomicArithmeticOpNop:
 		return c.compileAtomicXchgImpl(amd64.XCHGB, offset, 1, vt)
 	}
 
-	_ = inst
-
-	return nil
+	return c.compileAtomicRMWCASLoopImpl(inst, offset, 1, vt)
 }
 
 func (c *amd64Compiler) compileAtomicRMW16(o *wazeroir.UnionOperation) error {
@@ -4659,18 +4655,16 @@ func (c *amd64Compiler) compileAtomicRMW16(o *wazeroir.UnionOperation) error {
 	case wazeroir.AtomicArithmeticOpSub:
 		return c.compileAtomicAddImpl(amd64.XADDW, offset, true, 16/8, vt)
 	case wazeroir.AtomicArithmeticOpAnd:
-		//inst = arm64.LDCLRALB
+		inst = amd64.ANDL
 	case wazeroir.AtomicArithmeticOpOr:
-		//inst = arm64.LDSETALB
+		inst = amd64.ORL
 	case wazeroir.AtomicArithmeticOpXor:
-		//inst = arm64.LDEORALB
+		inst = amd64.XORL
 	case wazeroir.AtomicArithmeticOpNop:
 		return c.compileAtomicXchgImpl(amd64.XCHGW, offset, 16/8, vt)
 	}
 
-	_ = inst
-
-	return nil
+	return c.compileAtomicRMWCASLoopImpl(inst, offset, 16/8, vt)
 }
 
 func (c *amd64Compiler) compileAtomicAddImpl(inst asm.Instruction, offsetConst uint32, negateArg bool, targetSizeInBytes int64, resultRuntimeValueType runtimeValueType) error {
@@ -4738,6 +4732,85 @@ func (c *amd64Compiler) compileAtomicXchgImpl(inst asm.Instruction, offsetConst 
 
 	c.locationStack.markRegisterUnused(reg)
 	c.locationStack.pushRuntimeValueLocationOnRegister(val.register, resultRuntimeValueType)
+
+	return nil
+}
+
+func (c *amd64Compiler) compileAtomicRMWCASLoopImpl(rmwInst asm.Instruction,
+	offsetConst uint32, targetSizeInBytes int64, resultRuntimeValueType runtimeValueType) error {
+	const resultRegister = amd64.RegAX
+
+	var copyInst asm.Instruction
+	var loadInst asm.Instruction
+	var cmpXchgInst asm.Instruction
+
+	switch targetSizeInBytes {
+	case 8:
+		copyInst = amd64.MOVQ
+		loadInst = amd64.MOVQ
+		cmpXchgInst = amd64.CMPXCHGQ
+	case 4:
+		copyInst = amd64.MOVL
+		loadInst = amd64.MOVL
+		cmpXchgInst = amd64.CMPXCHGL
+	case 2:
+		copyInst = amd64.MOVL
+		loadInst = amd64.MOVWLZX
+		cmpXchgInst = amd64.CMPXCHGW
+	case 1:
+		copyInst = amd64.MOVL
+		loadInst = amd64.MOVBLZX
+		cmpXchgInst = amd64.CMPXCHGB
+	}
+
+	c.onValueReleaseRegisterToStack(resultRegister)
+	c.locationStack.markRegisterUsed(resultRegister)
+
+	tmp, err := c.allocateRegister(registerTypeGeneralPurpose)
+	if err != nil {
+		return err
+	}
+	c.locationStack.markRegisterUsed(tmp)
+
+	val := c.locationStack.pop()
+	if err := c.compileEnsureOnRegister(val); err != nil {
+		return err
+	}
+
+	reg, err := c.compileMemoryAccessCeilSetup(offsetConst, targetSizeInBytes)
+	if err != nil {
+		return err
+	}
+
+	if targetSizeInBytes < 32 {
+		mask := (1 << (8 * targetSizeInBytes)) - 1
+		c.assembler.CompileConstToRegister(amd64.ANDQ, int64(mask), val.register)
+	}
+
+	beginLoop := c.assembler.CompileStandAlone(amd64.NOP)
+	c.assembler.CompileRegisterToRegister(copyInst, val.register, tmp)
+	c.assembler.CompileMemoryWithIndexToRegister(
+		loadInst, amd64ReservedRegisterForMemory, -targetSizeInBytes, reg, 1, resultRegister)
+	if targetSizeInBytes < 32 {
+		mask := (1 << (8 * targetSizeInBytes)) - 1
+		c.assembler.CompileConstToRegister(amd64.ANDQ, int64(mask), resultRegister)
+	}
+	c.assembler.CompileRegisterToRegister(rmwInst, resultRegister, tmp)
+	c.assembler.CompileRegisterToMemoryWithIndexAndLock(
+		cmpXchgInst, tmp,
+		amd64ReservedRegisterForMemory, -targetSizeInBytes, reg, 1,
+	)
+	c.assembler.CompileJump(amd64.JNE).AssignJumpTarget(beginLoop)
+
+	if targetSizeInBytes < 32 {
+		mask := (1 << (8 * targetSizeInBytes)) - 1
+		c.assembler.CompileConstToRegister(amd64.ANDQ, int64(mask), resultRegister)
+	}
+
+	c.locationStack.markRegisterUnused(reg)
+	c.locationStack.markRegisterUnused(tmp)
+	c.locationStack.markRegisterUnused(val.register)
+	c.locationStack.pushRuntimeValueLocationOnRegister(resultRegister, resultRuntimeValueType)
 
 	return nil
 }
