@@ -75,6 +75,14 @@ const (
 	CMPL
 	// CMPQ is the CMP instruction in 64-bit mode. https://www.felixcloutier.com/x86/cmp
 	CMPQ
+	// CMPXCHGQ is the CMPXCHG instruction in 64-bit mode. https://www.felixcloutier.com/x86/cmpxchg
+	CMPXCHGQ
+	// CMPXCHGL is the CMPXCHG instruction in 32-bit mode. https://www.felixcloutier.com/x86/cmpxchg
+	CMPXCHGL
+	// CMPXCHGW is the CMPXCHG instruction in 16-bit mode. https://www.felixcloutier.com/x86/cmpxchg
+	CMPXCHGW
+	// CMPXCHGW is the CMPXCHG instruction in 8-bit mode. https://www.felixcloutier.com/x86/cmpxchg
+	CMPXCHGB
 	// COMISD is the COMISD instruction. https://www.felixcloutier.com/x86/comisd
 	COMISD
 	// COMISS is the COMISS instruction. https://www.felixcloutier.com/x86/comiss

@@ -748,16 +748,21 @@ func (a *AssemblerImpl) CompileRegisterToMemory(
 	n.dstConst = destinationOffsetConst
 }
 
-// CompileRegisterToMemoryWithLock implements the same method as documented on asm.AssemblerBase.
-func (a *AssemblerImpl) CompileRegisterToMemoryWithLock(
+// CompileRegisterToMemoryWithIndexAndLock implements the same method as documented on asm.AssemblerBase.
+func (a *AssemblerImpl) CompileRegisterToMemoryWithIndexAndLock(
 	instruction asm.Instruction,
-	sourceRegister, destinationBaseRegister asm.Register,
-	destinationOffsetConst asm.ConstantValue,
+	srcReg asm.Register,
+	dstBaseReg asm.Register,
+	dstOffsetConst int64,
+	dstIndex asm.Register,
+	dstScale int16,
 ) {
 	n := a.newNode(instruction, operandTypesRegisterToMemory)
-	n.srcReg = sourceRegister
-	n.dstReg = destinationBaseRegister
-	n.dstConst = destinationOffsetConst
+	n.srcReg = srcReg
+	n.dstReg = dstBaseReg
+	n.dstConst = dstOffsetConst
+	n.dstMemIndex = dstIndex
+	n.dstMemScale = byte(dstScale)
 	n.flag |= nodeFlagLock
 }
 
@@ -1966,6 +1971,26 @@ func (a *AssemblerImpl) encodeRegisterToMemory(buf asm.Buffer, n *nodeImpl) (err
 		// https://www.felixcloutier.com/x86/xadd
 		rexPrefix |= rexPrefixW
 		opcode = []byte{0x0F, 0xC1}
+	case CMPXCHGB:
+		// https://www.felixcloutier.com/x86/cmpxchg
+		opcode = []byte{0x0F, 0xB0}
+		// 1 byte register operands need default prefix for the following registers.
+		if n.srcReg >= RegSP && n.srcReg <= RegDI {
+			rexPrefix |= rexPrefixDefault
+		}
+	case CMPXCHGW:
+		// https://www.felixcloutier.com/x86/cmpxchg
+		// Note: Need 0x66 to indicate that the operand size is 16-bit.
+		// https://wiki.osdev.org/X86-64_Instruction_Encoding#Operand-size_and_address-size_override_prefix
+		mandatoryPrefix = 0x66
+		opcode = []byte{0x0F, 0xB1}
+	case CMPXCHGL:
+		// https://www.felixcloutier.com/x86/cmpxchg
+		opcode = []byte{0x0F, 0xB1}
+	case CMPXCHGQ:
+		// https://www.felixcloutier.com/x86/cmpxchg
+		rexPrefix |= rexPrefixW
+		opcode = []byte{0x0F, 0xB1}
 	default:
 		return errorEncodingUnsupported(n)
 	}

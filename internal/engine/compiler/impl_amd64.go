@@ -4743,14 +4743,104 @@ func (c *amd64Compiler) compileAtomicXchgImpl(inst asm.Instruction, offsetConst 
 }
 
 func (c *amd64Compiler) compileAtomicRMWCmpxchg(o *wazeroir.UnionOperation) error {
-	return nil
+	var (
+		casInst           asm.Instruction
+		targetSizeInBytes int64
+		vt                runtimeValueType
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		casInst = amd64.CMPXCHGL
+		targetSizeInBytes = 32 / 8
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		casInst = amd64.CMPXCHGQ
+		targetSizeInBytes = 64 / 8
+		vt = runtimeValueTypeI64
+	}
+	return c.compileAtomicRMWCmpxchgImpl(casInst, offset, targetSizeInBytes, vt)
 }
 
 func (c *amd64Compiler) compileAtomicRMW8Cmpxchg(o *wazeroir.UnionOperation) error {
-	return nil
+	var vt runtimeValueType
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		vt = runtimeValueTypeI64
+	}
+	return c.compileAtomicRMWCmpxchgImpl(amd64.CMPXCHGB, offset, 1, vt)
 }
 
 func (c *amd64Compiler) compileAtomicRMW16Cmpxchg(o *wazeroir.UnionOperation) error {
+	var vt runtimeValueType
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		vt = runtimeValueTypeI64
+	}
+	return c.compileAtomicRMWCmpxchgImpl(amd64.CMPXCHGW, offset, 16/8, vt)
+}
+
+func (c *amd64Compiler) compileAtomicRMWCmpxchgImpl(inst asm.Instruction, offsetArg uint32, targetSizeInBytes int64, resultRuntimeValueType runtimeValueType) error {
+	const resultRegister = amd64.RegAX
+
+	repl := c.locationStack.pop()
+	exp := c.locationStack.pop()
+
+	// expected value must be in accumulator register, which will also hold the loaded result.
+	if exp.register != resultRegister {
+		c.onValueReleaseRegisterToStack(resultRegister)
+		if exp.onConditionalRegister() {
+			c.compileMoveConditionalToGeneralPurposeRegister(exp, resultRegister)
+		} else if exp.onStack() {
+			exp.setRegister(resultRegister)
+			c.compileLoadValueOnStackToRegister(exp)
+			c.locationStack.markRegisterUnused(resultRegister)
+		} else {
+			c.assembler.CompileRegisterToRegister(amd64.MOVQ, exp.register, resultRegister)
+			c.locationStack.releaseRegister(exp)
+			exp.setRegister(resultRegister)
+			c.locationStack.markRegisterUsed(resultRegister)
+		}
+	}
+
+	if err := c.compileEnsureOnRegister(repl); err != nil {
+		return err
+	}
+
+	reg, err := c.compileMemoryAccessCeilSetup(offsetArg, targetSizeInBytes)
+	if err != nil {
+		return err
+	}
+
+	c.assembler.CompileRegisterToMemoryWithIndexAndLock(
+		inst, repl.register,
+		amd64ReservedRegisterForMemory, -targetSizeInBytes, reg, 1,
+	)
+
+	if targetSizeInBytes < 4 {
+		mask := (1 << (8 * targetSizeInBytes)) - 1
+		c.assembler.CompileConstToRegister(amd64.ANDQ, int64(mask), resultRegister)
+	}
+
+	c.locationStack.markRegisterUnused(reg)
+	c.locationStack.markRegisterUnused(repl.register)
+	c.locationStack.pushRuntimeValueLocationOnRegister(resultRegister, resultRuntimeValueType)
+
 	return nil
 }
 
