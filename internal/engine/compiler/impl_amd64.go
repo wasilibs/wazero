@@ -4699,7 +4699,7 @@ func (c *amd64Compiler) compileAtomicAddImpl(inst asm.Instruction, offsetConst u
 		return err
 	}
 
-	c.assembler.CompileRegisterToMemoryWithIndex(
+	c.assembler.CompileRegisterToMemoryWithIndexAndLock(
 		inst, val.register,
 		amd64ReservedRegisterForMemory, -targetSizeInBytes, reg, 1,
 	)
