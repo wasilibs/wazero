@@ -5096,7 +5096,42 @@ func (c *amd64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) erro
 	return nil
 }
 
-func (c *amd64Compiler) compileAtomicMemoryNotify(_ *wazeroir.UnionOperation) error {
+func (c *amd64Compiler) compileAtomicMemoryNotify(o *wazeroir.UnionOperation) error {
+	offset := uint32(o.U2)
+
+	if err := c.maybeCompileMoveTopConditionalToGeneralPurposeRegister(); err != nil {
+		return err
+	}
+
+	count := c.locationStack.pop()
+	if err := c.compileEnsureOnRegister(count); err != nil {
+		return err
+	}
+
+	reg, err := c.compileMemoryAccessCeilSetup(offset, 4)
+	if err != nil {
+		return err
+	}
+	c.compileMemoryAlignmentCheck(reg, 4)
+
+	// Push address and count back to read in Go
+	c.pushRuntimeValueLocationOnRegister(reg, runtimeValueTypeI64)
+	c.pushRuntimeValueLocationOnRegister(count.register, runtimeValueTypeI32)
+	if err := c.compileCallBuiltinFunction(builtinFunctionMemoryNotify); err != nil {
+		return err
+	}
+
+	// Address and count consumed by Go
+	c.locationStack.pop()
+	c.locationStack.pop()
+
+	// Then, the result was pushed.
+	v := c.locationStack.pushRuntimeValueLocationOnStack()
+	v.valueType = runtimeValueTypeI32
+
+	// After return, we re-initialize reserved registers just like preamble of functions.
+	c.compileReservedStackBasePointerInitialization()
+	c.compileReservedMemoryPointerInitialization()
 	return nil
 }
 
