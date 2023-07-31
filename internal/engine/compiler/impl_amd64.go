@@ -5017,6 +5017,82 @@ func (c *amd64Compiler) compileAtomicRMWCmpxchgImpl(inst asm.Instruction, offset
 }
 
 func (c *amd64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) error {
+	if err := c.maybeCompileMoveTopConditionalToGeneralPurposeRegister(); err != nil {
+		return err
+	}
+
+	var (
+		loadInst          asm.Instruction
+		vt                runtimeValueType
+		targetSizeInBytes int64
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		loadInst = amd64.MOVL
+		vt = runtimeValueTypeI32
+		targetSizeInBytes = 32 / 8
+	case wazeroir.UnsignedTypeI64:
+		loadInst = amd64.MOVQ
+		vt = runtimeValueTypeI64
+		targetSizeInBytes = 64 / 8
+	}
+
+	timeout := c.locationStack.pop()
+	if err := c.compileEnsureOnRegister(timeout); err != nil {
+		return err
+	}
+	exp := c.locationStack.pop()
+	if err := c.compileEnsureOnRegister(exp); err != nil {
+		return err
+	}
+
+	reg, err := c.compileMemoryAccessCeilSetup(offset, targetSizeInBytes)
+	if err != nil {
+		return err
+	}
+	c.compileMemoryAlignmentCheck(reg, targetSizeInBytes)
+
+	resultRegister, err := c.allocateRegister(registerTypeGeneralPurpose)
+	if err != nil {
+		return err
+	}
+
+	c.assembler.CompileMemoryWithIndexToRegister(loadInst,
+		// we access memory as memory.Buffer[ceil-targetSizeInBytes: ceil].
+		amd64ReservedRegisterForMemory, -targetSizeInBytes, reg, 1,
+		reg)
+
+	// Push address, values, and timeout back to read in Go
+	c.pushRuntimeValueLocationOnRegister(reg, runtimeValueTypeI64)
+	c.pushRuntimeValueLocationOnRegister(exp.register, vt)
+	c.pushRuntimeValueLocationOnRegister(resultRegister, vt)
+	c.pushRuntimeValueLocationOnRegister(timeout.register, runtimeValueTypeI64)
+	if err := c.compileCallBuiltinFunction(builtinFunctionMemoryWait); err != nil {
+		return err
+	}
+	// Address, values and timeout consumed in Go
+	c.locationStack.pop()
+	c.locationStack.pop()
+	c.locationStack.pop()
+	c.locationStack.pop()
+
+	// Then, the result was pushed.
+	v := c.locationStack.pushRuntimeValueLocationOnStack()
+	v.valueType = runtimeValueTypeI32
+
+	c.locationStack.markRegisterUnused(reg)
+	c.locationStack.releaseRegister(exp)
+	c.locationStack.releaseRegister(timeout)
+	c.locationStack.markRegisterUnused(resultRegister)
+
+	// After return, we re-initialize reserved registers just like preamble of functions.
+	c.compileReservedStackBasePointerInitialization()
+	c.compileReservedMemoryPointerInitialization()
+
 	return nil
 }
 
