@@ -4505,18 +4505,87 @@ func (c *amd64Compiler) compileConstF64(o *wazeroir.UnionOperation) error {
 }
 
 func (c *amd64Compiler) compileAtomicLoad(o *wazeroir.UnionOperation) error {
-	// Normal load is atomic on amd64 as long as stores use lock.
-	return c.compileLoad(o)
+	var (
+		inst              asm.Instruction
+		targetSizeInBytes int64
+		vt                runtimeValueType
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		inst = amd64.MOVL
+		targetSizeInBytes = 32 / 8
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		inst = amd64.MOVQ
+		targetSizeInBytes = 64 / 8
+		vt = runtimeValueTypeI64
+	}
+
+	return c.compileAtomicLoadImpl(inst, offset, targetSizeInBytes, vt)
 }
 
 func (c *amd64Compiler) compileAtomicLoad8(o *wazeroir.UnionOperation) error {
-	// Normal load is atomic on amd64 as long as stores use lock.
-	return c.compileLoad8(o)
+	var (
+		inst asm.Instruction
+		vt   runtimeValueType
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		inst = amd64.MOVBLZX
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		inst = amd64.MOVBQZX
+		vt = runtimeValueTypeI64
+	}
+
+	return c.compileAtomicLoadImpl(inst, offset, 1, vt)
 }
 
 func (c *amd64Compiler) compileAtomicLoad16(o *wazeroir.UnionOperation) error {
-	// Normal load is atomic on amd64 as long as stores use lock.
-	return c.compileLoad16(o)
+	var (
+		inst asm.Instruction
+		vt   runtimeValueType
+	)
+
+	unsignedType := wazeroir.UnsignedType(o.B1)
+	offset := uint32(o.U2)
+
+	switch unsignedType {
+	case wazeroir.UnsignedTypeI32:
+		inst = amd64.MOVWLZX
+		vt = runtimeValueTypeI32
+	case wazeroir.UnsignedTypeI64:
+		inst = amd64.MOVWQZX
+		vt = runtimeValueTypeI64
+	}
+
+	return c.compileAtomicLoadImpl(inst, offset, 16/8, vt)
+}
+
+func (c *amd64Compiler) compileAtomicLoadImpl(
+	inst asm.Instruction, offset uint32, targetSizeInBytes int64, resultRuntimeValueType runtimeValueType) error {
+	reg, err := c.compileMemoryAccessCeilSetup(offset, targetSizeInBytes)
+	if err != nil {
+		return err
+	}
+
+	c.compileMemoryAlignmentCheck(reg, targetSizeInBytes)
+
+	c.assembler.CompileMemoryWithIndexToRegister(inst,
+		// we access memory as memory.Buffer[ceil-targetSizeInBytes: ceil].
+		amd64ReservedRegisterForMemory, -targetSizeInBytes, reg, 1,
+		reg)
+	c.pushRuntimeValueLocationOnRegister(reg, resultRuntimeValueType)
+
+	return nil
 }
 
 func (c *amd64Compiler) compileAtomicStore(o *wazeroir.UnionOperation) error {
@@ -4532,18 +4601,40 @@ func (c *amd64Compiler) compileAtomicStore(o *wazeroir.UnionOperation) error {
 		inst = amd64.XCHGQ
 		targetSizeInByte = 64 / 8
 	}
-	// Atomic store behaves the same as normal one but using the XCHG instruction.
-	return c.compileStoreImpl(offset, inst, targetSizeInByte)
+	return c.compileAtomicStoreImpl(inst, offset, targetSizeInByte)
 }
 
 func (c *amd64Compiler) compileAtomicStore8(o *wazeroir.UnionOperation) error {
-	// Atomic store behaves the same as normal one but using the XCHG instruction.
-	return c.compileStoreImpl(uint32(o.U2), amd64.XCHGB, 1)
+	return c.compileAtomicStoreImpl(amd64.XCHGB, uint32(o.U2), 1)
 }
 
 func (c *amd64Compiler) compileAtomicStore16(o *wazeroir.UnionOperation) error {
-	// Atomic store behaves the same as normal one but using the XCHG instruction.
-	return c.compileStoreImpl(uint32(o.U2), amd64.XCHGW, 16/8)
+	return c.compileAtomicStoreImpl(amd64.XCHGW, uint32(o.U2), 16/8)
+}
+
+func (c *amd64Compiler) compileAtomicStoreImpl(
+	inst asm.Instruction, offset uint32, targetSizeInBytes int64) error {
+	val := c.locationStack.pop()
+	if err := c.compileEnsureOnRegister(val); err != nil {
+		return err
+	}
+
+	reg, err := c.compileMemoryAccessCeilSetup(offset, targetSizeInBytes)
+	if err != nil {
+		return err
+	}
+
+	c.compileMemoryAlignmentCheck(reg, targetSizeInBytes)
+
+	c.assembler.CompileRegisterToMemoryWithIndex(
+		inst, val.register,
+		amd64ReservedRegisterForMemory, -targetSizeInBytes, reg, 1,
+	)
+
+	// We no longer need both the value and base registers.
+	c.locationStack.releaseRegister(val)
+	c.locationStack.markRegisterUnused(reg)
+	return nil
 }
 
 func (c *amd64Compiler) compileAtomicRMW(o *wazeroir.UnionOperation) error {
@@ -4693,6 +4784,8 @@ func (c *amd64Compiler) compileAtomicAddImpl(inst asm.Instruction, offsetConst u
 		return err
 	}
 
+	c.compileMemoryAlignmentCheck(reg, targetSizeInBytes)
+
 	c.assembler.CompileRegisterToMemoryWithIndexAndLock(
 		inst, val.register,
 		amd64ReservedRegisterForMemory, -targetSizeInBytes, reg, 1,
@@ -4719,6 +4812,8 @@ func (c *amd64Compiler) compileAtomicXchgImpl(inst asm.Instruction, offsetConst 
 	if err != nil {
 		return err
 	}
+
+	c.compileMemoryAlignmentCheck(reg, targetSizeInBytes)
 
 	c.assembler.CompileRegisterToMemoryWithIndex(
 		inst, val.register,
@@ -4781,6 +4876,8 @@ func (c *amd64Compiler) compileAtomicRMWCASLoopImpl(rmwInst asm.Instruction,
 	if err != nil {
 		return err
 	}
+
+	c.compileMemoryAlignmentCheck(reg, targetSizeInBytes)
 
 	if targetSizeInBytes < 32 {
 		mask := (1 << (8 * targetSizeInBytes)) - 1
@@ -4900,6 +4997,8 @@ func (c *amd64Compiler) compileAtomicRMWCmpxchgImpl(inst asm.Instruction, offset
 		return err
 	}
 
+	c.compileMemoryAlignmentCheck(reg, targetSizeInBytes)
+
 	c.assembler.CompileRegisterToMemoryWithIndexAndLock(
 		inst, repl.register,
 		amd64ReservedRegisterForMemory, -targetSizeInBytes, reg, 1,
@@ -4927,6 +5026,26 @@ func (c *amd64Compiler) compileAtomicMemoryNotify(_ *wazeroir.UnionOperation) er
 
 func (c *amd64Compiler) compileAtomicFence(_ *wazeroir.UnionOperation) error {
 	return nil
+}
+
+func (c *amd64Compiler) compileMemoryAlignmentCheck(baseRegister asm.Register, targetSizeInBytes int64) {
+	if targetSizeInBytes == 1 {
+		return // No alignment restrictions when accessing a byte
+	}
+	var checkBits asm.ConstantValue
+	switch targetSizeInBytes {
+	case 2:
+		checkBits = 0b1
+	case 4:
+		checkBits = 0b11
+	case 8:
+		checkBits = 0b111
+	}
+	c.assembler.CompileConstToRegister(amd64.TESTQ, checkBits, baseRegister)
+	aligned := c.assembler.CompileJump(amd64.JEQ)
+
+	c.compileExitFromNativeCode(nativeCallStatusUnalignedAtomic)
+	c.assembler.SetJumpTargetOnNext(aligned)
 }
 
 // compileLoadValueOnStackToRegister implements compiler.compileLoadValueOnStackToRegister for amd64.
