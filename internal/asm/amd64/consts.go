@@ -597,6 +597,9 @@ const (
 	// XADDQ is the XADD instruction in 64-bit mode https://www.felixcloutier.com/x86/xadd
 	XADDQ
 
+	// MFENCE is the MFENCE instrution https://www.felixcloutier.com/x86/mfence
+	MFENCE
+
 	// instructionEnd is always placed at the bottom of this iota definition to be used in the test.
 	instructionEnd
 )

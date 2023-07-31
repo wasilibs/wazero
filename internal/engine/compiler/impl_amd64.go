@@ -5136,6 +5136,7 @@ func (c *amd64Compiler) compileAtomicMemoryNotify(o *wazeroir.UnionOperation) er
 }
 
 func (c *amd64Compiler) compileAtomicFence(_ *wazeroir.UnionOperation) error {
+	c.assembler.CompileStandAlone(amd64.MFENCE)
 	return nil
 }
 

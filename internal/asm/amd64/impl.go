@@ -986,6 +986,8 @@ func (a *AssemblerImpl) encodeNoneToNone(buf asm.Buffer, n *nodeImpl) (err error
 		code = append(code, 0xfd)
 	case CLD:
 		code = append(code, 0xfc)
+	case MFENCE:
+		code = append(code, 0x0F, 0xAE, 0xF0)
 	default:
 		err = errorEncodingUnsupported(n)
 	}
