@@ -120,8 +120,10 @@ func (m *ModuleInstance) closeWithExitCode(ctx context.Context, exitCode uint32)
 		return nil // not an error to have already closed
 	}
 	// TODO(anuraaga): A shared memory probably needs to be closed somewhere other than the module level
-	if err := m.MemoryInstance.Close(); err != nil {
-		return err
+	if m.MemoryInstance != nil {
+		if err := m.MemoryInstance.Close(); err != nil {
+			return err
+		}
 	}
 	return m.ensureResourcesClosed(ctx)
 }
