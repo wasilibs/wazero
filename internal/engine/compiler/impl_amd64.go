@@ -5061,6 +5061,7 @@ func (c *amd64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) erro
 	if err != nil {
 		return err
 	}
+	c.locationStack.markRegisterUsed(reg)
 	c.compileMemoryAlignmentCheck(reg, targetSizeInBytes)
 
 	resultRegister, err := c.allocateRegister(registerTypeGeneralPurpose)
@@ -5074,10 +5075,10 @@ func (c *amd64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) erro
 		reg)
 
 	// Push address, values, and timeout back to read in Go
-	c.pushRuntimeValueLocationOnRegister(reg, runtimeValueTypeI64)
 	c.pushRuntimeValueLocationOnRegister(exp.register, vt)
-	c.pushRuntimeValueLocationOnRegister(resultRegister, vt)
 	c.pushRuntimeValueLocationOnRegister(timeout.register, runtimeValueTypeI64)
+	c.pushRuntimeValueLocationOnRegister(reg, runtimeValueTypeI64)
+	c.pushRuntimeValueLocationOnRegister(resultRegister, vt)
 	if err := c.compileCallBuiltinFunction(builtinFunctionMemoryWait); err != nil {
 		return err
 	}

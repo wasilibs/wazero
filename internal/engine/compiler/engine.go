@@ -1136,10 +1136,10 @@ func (ce *callEngine) builtinFunctionMemoryWait(mem *wasm.MemoryInstance) {
 		panic(wasmruntime.ErrRuntimeExpectedSharedMemory)
 	}
 
-	timeout := ce.popValue()
 	loaded := ce.popValue()
-	exp := ce.popValue()
 	addr := ce.popValue()
+	timeout := ce.popValue()
+	exp := ce.popValue()
 
 	if exp != loaded {
 		ce.pushValue(1)

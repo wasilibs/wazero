@@ -4808,12 +4808,11 @@ func (c *arm64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) erro
 	if err != nil {
 		return err
 	}
+	c.markRegisterUsed(timeout.register)
 	exp, err := c.popValueOnRegister()
 	if err != nil {
 		return err
 	}
-	// Mark temporarily used as compileMemoryAccessOffsetSetup might try allocating register.
-	c.markRegisterUsed(timeout.register)
 	c.markRegisterUsed(exp.register)
 
 	baseReg, err := c.compileMemoryAccessBaseSetup(offset, targetSizeInBytes)
@@ -4830,10 +4829,10 @@ func (c *arm64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) erro
 	c.assembler.CompileMemoryWithRegisterSourceToRegister(loadInst, baseReg, resultRegister)
 
 	// Push address, values, and timeout back to read in Go
-	c.pushRuntimeValueLocationOnRegister(baseReg, runtimeValueTypeI64)
 	c.pushRuntimeValueLocationOnRegister(exp.register, vt)
-	c.pushRuntimeValueLocationOnRegister(resultRegister, vt)
 	c.pushRuntimeValueLocationOnRegister(timeout.register, runtimeValueTypeI64)
+	c.pushRuntimeValueLocationOnRegister(baseReg, runtimeValueTypeI64)
+	c.pushRuntimeValueLocationOnRegister(resultRegister, vt)
 	if err := c.compileCallGoFunction(nativeCallStatusCodeCallBuiltInFunction, builtinFunctionMemoryWait); err != nil {
 		return err
 	}
