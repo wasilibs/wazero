@@ -231,6 +231,9 @@ func (j *compilerEnv) requireNewCompiler(t *testing.T, functionType *wasm.Functi
 		ir = &wazeroir.CompilationResult{
 			LabelCallers: map[wazeroir.Label]uint32{},
 		}
+		if j.moduleInstance.MemoryInstance != nil {
+			ir.HasMemory = true
+		}
 	}
 
 	c := fn()
