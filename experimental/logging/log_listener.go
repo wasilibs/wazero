@@ -49,6 +49,8 @@ const (
 	LogScopePoll = logging.LogScopePoll
 	// LogScopeRandom enables logging for functions such as `random_get`.
 	LogScopeRandom = logging.LogScopeRandom
+	// LogScopeSock enables logging for functions such as `sock_accept`.
+	LogScopeSock = logging.LogScopeSock
 	// LogScopeAll means all functions should be logged.
 	LogScopeAll = logging.LogScopeAll
 )
@@ -113,7 +115,7 @@ func (f *loggingListenerFactory) NewFunctionListener(fnd api.FunctionDefinition)
 			return nil
 		}
 		pSampler, pLoggers, rLoggers = wasilogging.Config(fnd)
-	case "go":
+	case "go", "gojs":
 		if !gologging.IsInLogScope(fnd, f.scopes) {
 			return nil
 		}

@@ -5,8 +5,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/tetratelabs/wazero/api"
+	"github.com/tetratelabs/wazero/internal/close"
 	"github.com/tetratelabs/wazero/internal/internalapi"
 	"github.com/tetratelabs/wazero/internal/leb128"
 	internalsys "github.com/tetratelabs/wazero/internal/sys"
@@ -70,17 +72,6 @@ type (
 	ModuleInstance struct {
 		internalapi.WazeroOnlyType
 
-		// Closed is used both to guard moduleEngine.CloseWithExitCode and to store the exit code.
-		//
-		// The update value is closedType + exitCode << 32. This ensures an exit code of zero isn't mistaken for never closed.
-		//
-		// Note: Exclusively reading and updating this with atomics guarantees cross-goroutine observations.
-		// See /RATIONALE.md
-		//
-		// TODO: Retype this to atomic.Unit64 when Go 1.18 is no longer supported. Until then, keep Closed at the top of
-		// this struct. See PR #1299 for an implementation and discussion.
-		Closed uint64
-
 		ModuleName     string
 		Exports        map[string]*Export
 		Globals        []*GlobalInstance
@@ -115,6 +106,14 @@ type (
 		//	  security implications.
 		Sys *internalsys.Context
 
+		// Closed is used both to guard moduleEngine.CloseWithExitCode and to store the exit code.
+		//
+		// The update value is closedType + exitCode << 32. This ensures an exit code of zero isn't mistaken for never closed.
+		//
+		// Note: Exclusively reading and updating this with atomics guarantees cross-goroutine observations.
+		// See /RATIONALE.md
+		Closed atomic.Uint64
+
 		// CodeCloser is non-nil when the code should be closed after this module.
 		CodeCloser api.Closer
 
@@ -122,13 +121,11 @@ type (
 		s *Store
 		// prev and next hold the nodes in the linked list of ModuleInstance held by Store.
 		prev, next *ModuleInstance
-		// aliases holds the module names that are aliases of this module registered in the store.
-		// Access to this field must be guarded by s.Mux.
-		//
-		// Note: This is currently only used for spectests and will be nil in most cases.
-		aliases []string
 		// Source is a pointer to the Module from which this ModuleInstance derives.
 		Source *Module
+
+		// CloseNotifier is an experimental hook called once on close.
+		CloseNotifier close.Notifier
 	}
 
 	// DataInstance holds bytes corresponding to the data segment in a module.
@@ -144,7 +141,6 @@ type (
 		Val uint64
 		// ValHi is only used for vector type globals, and holds the higher bits of the vector.
 		ValHi uint64
-		// ^^ TODO: this should be guarded with atomics when mutable
 	}
 
 	// FunctionTypeID is a uniquely assigned integer for a function type.
@@ -157,8 +153,14 @@ type (
 const maximumFunctionTypes = 1 << 27
 
 // GetFunctionTypeID is used by emscripten.
-func (m *ModuleInstance) GetFunctionTypeID(t *FunctionType) (FunctionTypeID, error) {
-	return m.s.GetFunctionTypeID(t)
+func (m *ModuleInstance) GetFunctionTypeID(t *FunctionType) FunctionTypeID {
+	id, err := m.s.GetFunctionTypeID(t)
+	if err != nil {
+		// This is not recoverable in practice since the only error GetFunctionTypeID returns is
+		// when there's too many function types in the store.
+		panic(err)
+	}
+	return id
 }
 
 func (m *ModuleInstance) buildElementInstances(elements []ElementSegment) {
@@ -218,10 +220,19 @@ func (m *ModuleInstance) applyElements(elems []ElementSegment) {
 				references[offset+uint32(i)] = Reference(0)
 			}
 		} else {
-			for i, fnIndex := range elem.Init {
-				if fnIndex != ElementInitNullReference {
-					references[offset+uint32(i)] = m.Engine.FunctionInstanceReference(fnIndex)
+			for i, init := range elem.Init {
+				if init == ElementInitNullReference {
+					continue
 				}
+
+				var ref Reference
+				if index, ok := unwrapElementInitGlobalReference(init); ok {
+					global := m.Globals[index]
+					ref = Reference(global.Val)
+				} else {
+					ref = m.Engine.FunctionInstanceReference(index)
+				}
+				references[offset+uint32(i)] = ref
 			}
 		}
 	}
@@ -364,6 +375,8 @@ func (s *Store) instantiate(
 
 	m.applyElements(module.ElementSection)
 
+	m.Engine.DoneInstantiation()
+
 	// Execute the start function.
 	if module.StartSection != nil {
 		funcIdx := *module.StartSection
@@ -443,6 +456,7 @@ func (m *ModuleInstance) resolveImports(module *Module) (err error) {
 					return
 				}
 				m.MemoryInstance = importedMemory
+				m.Engine.ResolveImportedMemory(importedModule.Engine)
 			case ExternTypeGlobal:
 				expected := i.DescGlobal
 				importedGlobal := importedModule.Globals[imported.Index]

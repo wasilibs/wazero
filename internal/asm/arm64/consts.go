@@ -510,6 +510,8 @@ const (
 	BCONDNE
 	// BCONDVS is the B.cond instruction with CondVS.
 	BCONDVS
+	// BCONDVC is the B.cond instruction with CondVC.
+	BCONDVC
 
 	// CLZ is the CLZ instruction. https://developer.arm.com/documentation/dui0802/a/A64-General-Instructions/CLZ
 	CLZ
@@ -1166,6 +1168,8 @@ func InstructionName(i asm.Instruction) string {
 		return "BCONDNE"
 	case BCONDVS:
 		return "BCONDVS"
+	case BCONDVC:
+		return "BCONDVC"
 	case CLZ:
 		return "CLZ"
 	case CLZW:

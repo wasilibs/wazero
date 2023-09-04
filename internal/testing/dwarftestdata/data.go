@@ -3,7 +3,6 @@ package dwarftestdata
 import (
 	"bytes"
 	"embed"
-	_ "embed"
 	"fmt"
 	"os/exec"
 )
@@ -13,8 +12,14 @@ import (
 // line number, source code file, etc, can change. Therefore,
 // even though these binaries are huge, we check them in to the repositories.
 
+//go:embed testdata/tinygo/main.wasm
+var TinyGoWasm []byte
+
 //go:embed testdata/zig/main.wasm
 var ZigWasm []byte
+
+//go:embed testdata/zig-cc/main.wasm
+var ZigCCWasm []byte
 
 // RustWasm comes with huge DWARF sections, so we do not check it in directly,
 // but instead xz-compressed one is.

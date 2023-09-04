@@ -412,6 +412,13 @@ type mockModuleEngine struct {
 	callFailIndex        int
 	functionRefs         map[Index]Reference
 	resolveImportsCalled map[Index]Index
+	importedMemModEngine ModuleEngine
+	lookupEntries        map[Index]mockModuleEngineLookupEntry
+}
+
+type mockModuleEngineLookupEntry struct {
+	m     *ModuleInstance
+	index Index
 }
 
 type mockCallEngine struct {
@@ -435,8 +442,11 @@ func (e *mockEngine) CompileModule(context.Context, *Module, []experimental.Func
 }
 
 // LookupFunction implements the same method as documented on wasm.Engine.
-func (e *mockModuleEngine) LookupFunction(*TableInstance, FunctionTypeID, Index) (api.Function, error) {
-	return nil, nil
+func (e *mockModuleEngine) LookupFunction(_ *TableInstance, _ FunctionTypeID, offset Index) (*ModuleInstance, Index) {
+	if entry, ok := e.lookupEntries[offset]; ok {
+		return entry.m, entry.index
+	}
+	return nil, 0
 }
 
 // CompiledModuleCount implements the same method as documented on wasm.Engine.
@@ -453,6 +463,9 @@ func (e *mockEngine) NewModuleEngine(_ *Module, _ *ModuleInstance) (ModuleEngine
 	return &mockModuleEngine{callFailIndex: e.callFailIndex, resolveImportsCalled: map[Index]Index{}}, nil
 }
 
+// mockModuleEngine implements the same method as documented on wasm.ModuleEngine.
+func (e *mockModuleEngine) DoneInstantiation() {}
+
 // FunctionInstanceReference implements the same method as documented on wasm.ModuleEngine.
 func (e *mockModuleEngine) FunctionInstanceReference(i Index) Reference {
 	return e.functionRefs[i]
@@ -461,6 +474,11 @@ func (e *mockModuleEngine) FunctionInstanceReference(i Index) Reference {
 // ResolveImportedFunction implements the same method as documented on wasm.ModuleEngine.
 func (e *mockModuleEngine) ResolveImportedFunction(index, importedIndex Index, _ ModuleEngine) {
 	e.resolveImportsCalled[index] = importedIndex
+}
+
+// ResolveImportedMemory implements the same method as documented on wasm.ModuleEngine.
+func (e *mockModuleEngine) ResolveImportedMemory(imp ModuleEngine) {
+	e.importedMemModEngine = imp
 }
 
 // NewFunction implements the same method as documented on wasm.ModuleEngine.
@@ -805,14 +823,16 @@ func Test_resolveImports(t *testing.T) {
 			max := uint32(10)
 			memoryInst := &MemoryInstance{Max: max}
 			s := newStore()
+			importedME := &mockModuleEngine{}
 			s.nameToModule[moduleName] = &ModuleInstance{
 				MemoryInstance: memoryInst,
 				Exports: map[string]*Export{name: {
 					Type: ExternTypeMemory,
 				}},
 				ModuleName: moduleName,
+				Engine:     importedME,
 			}
-			m := &ModuleInstance{s: s}
+			m := &ModuleInstance{s: s, Engine: &mockModuleEngine{resolveImportsCalled: map[Index]Index{}}}
 			err := m.resolveImports(&Module{
 				ImportPerModule: map[string][]*Import{
 					moduleName: {{Module: moduleName, Name: name, Type: ExternTypeMemory, DescMem: &Memory{Max: max}}},
@@ -820,6 +840,7 @@ func Test_resolveImports(t *testing.T) {
 			})
 			require.NoError(t, err)
 			require.Equal(t, m.MemoryInstance, memoryInst)
+			require.Equal(t, importedME, m.Engine.(*mockModuleEngine).importedMemModEngine)
 		})
 		t.Run("minimum size mismatch", func(t *testing.T) {
 			importMemoryType := &Memory{Min: 2, Cap: 2}
@@ -933,7 +954,7 @@ func globalsContain(globals []*GlobalInstance, want *GlobalInstance) bool {
 	return false
 }
 
-func TestModuleInstance_applyElementsapplyElements(t *testing.T) {
+func TestModuleInstance_applyElements(t *testing.T) {
 	leb128_100 := leb128.EncodeInt32(100)
 
 	t.Run("extenref", func(t *testing.T) {
@@ -962,7 +983,7 @@ func TestModuleInstance_applyElementsapplyElements(t *testing.T) {
 		me, err := e.NewModuleEngine(nil, nil)
 		me.(*mockModuleEngine).functionRefs = map[Index]Reference{0: 0xa, 1: 0xaa, 2: 0xaaa, 3: 0xaaaa}
 		require.NoError(t, err)
-		m := &ModuleInstance{Engine: me}
+		m := &ModuleInstance{Engine: me, Globals: []*GlobalInstance{{}, {Val: 0xabcde}}}
 
 		m.Tables = []*TableInstance{{Type: RefTypeFuncref, References: make([]Reference, 10)}}
 		for i := range m.Tables[0].References {
@@ -973,15 +994,16 @@ func TestModuleInstance_applyElementsapplyElements(t *testing.T) {
 		m.applyElements([]ElementSegment{{Mode: ElementModeActive, OffsetExpr: ConstantExpression{Opcode: OpcodeI32Const, Data: leb128_100}, Init: []Index{1, 2, 3}}})
 		m.applyElements([]ElementSegment{
 			{Mode: ElementModeActive, OffsetExpr: ConstantExpression{Opcode: OpcodeI32Const, Data: []byte{0}}, Init: []Index{0, 1, 2}},
+			{Mode: ElementModeActive, OffsetExpr: ConstantExpression{Opcode: OpcodeI32Const, Data: []byte{9}}, Init: []Index{1 | ElementInitImportedGlobalFunctionReference}},
 			{Mode: ElementModeActive, OffsetExpr: ConstantExpression{Opcode: OpcodeI32Const, Data: leb128_100}, Init: make([]Index, 5)}, // Iteration stops at this point, so the offset:5 below shouldn't be applied.
 			{Mode: ElementModeActive, OffsetExpr: ConstantExpression{Opcode: OpcodeI32Const, Data: []byte{5}}, Init: make([]Index, 5)},
 		})
-		require.Equal(t, []Reference{0xa, 0xaa, 0xaaa, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff},
+		require.Equal(t, []Reference{0xa, 0xaa, 0xaaa, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xabcde},
 			m.Tables[0].References)
 		m.applyElements([]ElementSegment{
 			{Mode: ElementModeActive, OffsetExpr: ConstantExpression{Opcode: OpcodeI32Const, Data: []byte{5}}, Init: []Index{0, ElementInitNullReference, 2}},
 		})
-		require.Equal(t, []Reference{0xa, 0xaa, 0xaaa, 0xffff, 0xffff, 0xa, 0xffff, 0xaaa, 0xffff, 0xffff},
+		require.Equal(t, []Reference{0xa, 0xaa, 0xaaa, 0xffff, 0xffff, 0xa, 0xffff, 0xaaa, 0xffff, 0xabcde},
 			m.Tables[0].References)
 	})
 }

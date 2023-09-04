@@ -46,19 +46,60 @@ func TestWithDebugInfo(t *testing.T) {
 				exp  string
 			}{
 				{
+					name: "tinygo",
+					bin:  dwarftestdata.TinyGoWasm,
+					exp: `module[] function[_start] failed: wasm error: unreachable
+wasm stack trace:
+	.runtime._panic(i32)
+		0x18f3: /runtime_tinygowasm.go:70:6
+	.main.c()
+		0x2ff9: /main.go:16:7
+	.main.b()
+		0x2f97: /main.go:12:3
+	.main.a()
+		0x2f39: /main.go:8:3
+	.main.main()
+		0x2149: /main.go:4:3
+	.runtime.run$1()
+		0x1fcb: /scheduler_any.go:25:11
+	.runtime.run$1$gowrapper(i32)
+		0x6f0: /scheduler_any.go:23:2
+	.tinygo_launch(i32)
+		0x23: /task_asyncify_wasm.S:59
+	.runtime.scheduler()
+		0x1ec4: /task_asyncify.go:109:17 (inlined)
+		        /scheduler.go:236:11
+	.runtime.run()
+		0x1d92: /scheduler_any.go:28:11
+	._start()
+		0x1d12: /runtime_wasm_wasi.go:21:5`,
+				},
+				{
 					name: "zig",
 					bin:  dwarftestdata.ZigWasm,
 					exp: `module[] function[_start] failed: wasm error: unreachable
 wasm stack trace:
 	.builtin.default_panic(i32,i32,i32,i32)
-		0x37: /builtin.zig:861:17
+		0x63: /builtin.zig:889:17
 	.main.main() i32
-		0x60: /main.zig:10:5 (inlined)
+		0x25: /main.zig:10:5 (inlined)
 		      /main.zig:6:5 (inlined)
 		      /main.zig:2:5
 	._start()
-		0x6a: /start.zig:617:37 (inlined)
-		      /start.zig:232:5`,
+		0x6a: /start.zig:609:37 (inlined)
+		      /start.zig:224:5`,
+				},
+				{
+					name: "cc",
+					bin:  dwarftestdata.ZigCCWasm,
+					exp: `module[] function[_start] failed: wasm error: unreachable
+wasm stack trace:
+	.a()
+		0x312: /main.c:7:18
+	.__original_main() i32
+		0x47c: /main.c:11:3
+	._start()
+	._start.command_export()`,
 				},
 				{
 					name: "rust",

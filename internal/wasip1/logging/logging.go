@@ -40,6 +40,10 @@ func isRandomFunction(fnd api.FunctionDefinition) bool {
 	return fnd.Name() == RandomGetName
 }
 
+func isSockFunction(fnd api.FunctionDefinition) bool {
+	return strings.HasPrefix(fnd.Name(), "sock_")
+}
+
 // IsInLogScope returns true if the current function is in any of the scopes.
 func IsInLogScope(fnd api.FunctionDefinition, scopes logging.LogScopes) bool {
 	if scopes.IsEnabled(logging.LogScopeClock) {
@@ -68,6 +72,12 @@ func IsInLogScope(fnd api.FunctionDefinition, scopes logging.LogScopes) bool {
 
 	if scopes.IsEnabled(logging.LogScopeRandom) {
 		if isRandomFunction(fnd) {
+			return true
+		}
+	}
+
+	if scopes.IsEnabled(logging.LogScopeSock) {
+		if isSockFunction(fnd) {
 			return true
 		}
 	}
@@ -121,25 +131,54 @@ func Config(fnd api.FunctionDefinition) (pSampler logging.ParamSampler, pLoggers
 			switch name {
 			case "id":
 				logger = logClockId(idx).Log
-				pLoggers = append(pLoggers, logger)
 			case "result.resolution":
 				name = resultParamName(name)
 				logger = logMemI32(idx).Log
 				rLoggers = append(rLoggers, resultParamLogger(name, logger))
+				continue
 			case "result.timestamp":
 				name = resultParamName(name)
 				logger = logMemI64(idx).Log
 				rLoggers = append(rLoggers, resultParamLogger(name, logger))
+				continue
 			default:
 				logger = logging.NewParamLogger(idx, name, types[idx])
-				pLoggers = append(pLoggers, logger)
 			}
+			pLoggers = append(pLoggers, logger)
+			continue
+		}
+
+		if strings.HasPrefix(fnd.Name(), "sock_") {
+			switch name {
+			case "flags":
+				logger = logFlags(idx).Log
+			case "ri_flags":
+				logger = logRiFlags(idx).Log
+			case "si_flags":
+				logger = logSiFlags(idx).Log
+			case "how":
+				logger = logSdFlags(idx).Log
+			case "result.fd", "result.ro_datalen", "result.so_datalen":
+				name = resultParamName(name)
+				logger = logMemI32(idx).Log
+				rLoggers = append(rLoggers, resultParamLogger(name, logger))
+				continue
+			case "result.ro_flags":
+				logger = logRoFlags(idx).Log
+				rLoggers = append(rLoggers, resultParamLogger("ro_flags", logger))
+				continue
+			default:
+				logger = logging.NewParamLogger(idx, name, types[idx])
+			}
+			pLoggers = append(pLoggers, logger)
 			continue
 		}
 
 		switch name {
 		case "fdflags":
 			logger = logFdflags(idx).Log
+		case "flags":
+			logger = logFlags(idx).Log
 		case "fst_flags":
 			logger = logFstflags(idx).Log
 		case "oflags":
@@ -342,6 +381,40 @@ type logFstflags int
 func (i logFstflags) Log(_ context.Context, _ api.Module, w logging.Writer, params []uint64) {
 	w.WriteString("fst_flags=")                   //nolint
 	w.WriteString(FstflagsString(int(params[i]))) //nolint
+}
+
+type logFlags int
+
+func (i logFlags) Log(_ context.Context, _ api.Module, w logging.Writer, params []uint64) {
+	w.WriteString("flags=")                      //nolint
+	w.WriteString(FdFlagsString(int(params[i]))) //nolint
+}
+
+type logSdFlags int
+
+func (i logSdFlags) Log(_ context.Context, _ api.Module, w logging.Writer, params []uint64) {
+	w.WriteString("how=")                        //nolint
+	w.WriteString(SdFlagsString(int(params[i]))) //nolint
+}
+
+type logSiFlags int
+
+func (i logSiFlags) Log(_ context.Context, _ api.Module, w logging.Writer, params []uint64) {
+	w.WriteString("si_flags=")                   //nolint
+	w.WriteString(SiFlagsString(int(params[i]))) //nolint
+}
+
+type logRiFlags int
+
+func (i logRiFlags) Log(_ context.Context, _ api.Module, w logging.Writer, params []uint64) {
+	w.WriteString("ri_flags=")                   //nolint
+	w.WriteString(RiFlagsString(int(params[i]))) //nolint
+}
+
+type logRoFlags int
+
+func (i logRoFlags) Log(_ context.Context, _ api.Module, w logging.Writer, params []uint64) {
+	w.WriteString(RoFlagsString(int(params[i]))) //nolint
 }
 
 func resultParamName(name string) string {

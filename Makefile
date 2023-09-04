@@ -1,10 +1,10 @@
 
-gofumpt       := mvdan.cc/gofumpt@v0.4.0
-gosimports    := github.com/rinchsan/gosimports/cmd/gosimports@v0.3.7
-golangci_lint := github.com/golangci/golangci-lint/cmd/golangci-lint@v1.51.2
+gofumpt       := mvdan.cc/gofumpt@v0.5.0
+gosimports    := github.com/rinchsan/gosimports/cmd/gosimports@v0.3.8
+golangci_lint := github.com/golangci/golangci-lint/cmd/golangci-lint@v1.53.3
 asmfmt        := github.com/klauspost/asmfmt/cmd/asmfmt@v1.3.2
 # sync this with netlify.toml!
-hugo          := github.com/gohugoio/hugo@v0.111.3
+hugo          := github.com/gohugoio/hugo@v0.115.2
 
 # Make 3.81 doesn't support '**' globbing: Set explicitly instead of recursion.
 all_sources   := $(wildcard *.go */*.go */*/*.go */*/*/*.go */*/*/*.go */*/*/*/*.go)
@@ -18,7 +18,6 @@ main_sources  := $(wildcard $(filter-out %_test.go $(all_testdata) $(all_testing
 # Paths need to all start with ./, so we do that manually vs foreach which strips it.
 main_packages := $(sort $(foreach f,$(dir $(main_sources)),$(if $(findstring ./,$(f)),./,./$(f))))
 
-# By default, we don't run with -race as it's costly to run on every PR.
 go_test_options ?= -timeout 300s
 
 ensureCompilerFastest := -ldflags '-X github.com/tetratelabs/wazero/internal/integration_test/vs.ensureCompilerFastest=true'
@@ -27,7 +26,7 @@ bench:
 	@go test -run=NONE -benchmem -bench=. ./internal/engine/compiler/...
 	@go build ./internal/integration_test/bench/...
 	@# Don't use -test.benchmem as it isn't accurate when comparing against CGO libs
-	@for d in vs/time vs/wasmedge vs/wasmer vs/wasmtime ; do \
+	@for d in vs/time vs/wasmedge vs/wasmtime ; do \
 		cd ./internal/integration_test/$$d ; \
 		go test -bench=. . -tags='wasmedge' $(ensureCompilerFastest) ; \
 		cd - ;\
@@ -54,7 +53,7 @@ build.examples.as:
 build.examples.zig: examples/allocation/zig/testdata/greet.wasm imports/wasi_snapshot_preview1/example/testdata/zig/cat.wasm imports/wasi_snapshot_preview1/testdata/zig/wasi.wasm
 	@cd internal/testing/dwarftestdata/testdata/zig; zig build; mv zig-out/*/main.wasm ./ # Need DWARF custom sections.
 
-tinygo_sources := examples/basic/testdata/add.go examples/allocation/tinygo/testdata/greet.go examples/cli/testdata/cli.go imports/wasi_snapshot_preview1/example/testdata/tinygo/cat.go
+tinygo_sources := examples/basic/testdata/add.go examples/allocation/tinygo/testdata/greet.go examples/cli/testdata/cli.go imports/wasi_snapshot_preview1/example/testdata/tinygo/cat.go imports/wasi_snapshot_preview1/testdata/tinygo/wasi.go
 .PHONY: build.examples.tinygo
 build.examples.tinygo: $(tinygo_sources)
 	@for f in $^; do \
@@ -62,11 +61,12 @@ build.examples.tinygo: $(tinygo_sources)
 	done
 
 # We use zig to build C as it is easy to install and embeds a copy of zig-cc.
-c_sources := imports/wasi_snapshot_preview1/example/testdata/zig-cc/cat.c imports/wasi_snapshot_preview1/testdata/zig-cc/wasi.c
+# Note: Don't use "-Oz" as that breaks our wasi sock example.
+c_sources := imports/wasi_snapshot_preview1/example/testdata/zig-cc/cat.c imports/wasi_snapshot_preview1/testdata/zig-cc/wasi.c internal/testing/dwarftestdata/testdata/zig-cc/main.c
 .PHONY: build.examples.zig-cc
 build.examples.zig-cc: $(c_sources)
 	@for f in $^; do \
-	    zig cc --target=wasm32-wasi -Oz -o $$(echo $$f | sed -e 's/\.c/\.wasm/') $$f; \
+	    zig cc --target=wasm32-wasi -o $$(echo $$f | sed -e 's/\.c/\.wasm/') $$f; \
 	done
 
 # Here are the emcc args we use:
@@ -166,7 +166,7 @@ build.spectest.v2: # Note: SIMD cases are placed in the "simd" subdirectory.
 	@cd $(spectest_v2_testdata_dir) \
 		&& curl -sSL 'https://api.github.com/repos/WebAssembly/spec/contents/test/core/simd?ref=$(spec_version_v2)' | jq -r '.[]| .download_url' | grep -E ".wast" | xargs -Iurl curl -sJL url -O
 	@cd $(spectest_v2_testdata_dir) && for f in `find . -name '*.wast'`; do \
-		wast2json --debug-names $$f; \
+		wast2json --debug-names --no-check $$f; \
 	done
 
 .PHONY: build.spectest.threads
@@ -232,6 +232,12 @@ check:
 # This makes sure the intepreter can be used. Most often the package that can
 # drift here is "platform" or "sysfs":
 #
+# Ensure we build on plan9. See #1578
+	@GOARCH=amd64 GOOS=plan9 go build ./...
+# Ensure we build on gojs. See #1526.
+	@GOARCH=wasm GOOS=js go build ./...
+# Ensure we build on gojs. See #1526.
+	@GOARCH=wasm GOOS=wasip1 go build ./...
 # Ensure we build on windows:
 	@GOARCH=amd64 GOOS=windows go build ./...
 # Ensure we build on an arbitrary operating system:
@@ -270,9 +276,9 @@ clean: ## Ensure a clean build
 fuzz_timeout_seconds ?= 10
 .PHONY: fuzz
 fuzz:
-	@cd internal/integration_test/fuzz && cargo fuzz run basic -- -max_total_time=$(fuzz_timeout_seconds)
-	@cd internal/integration_test/fuzz && cargo fuzz run memory_no_diff -- -max_total_time=$(fuzz_timeout_seconds)
-	@cd internal/integration_test/fuzz && cargo fuzz run validation -- -max_total_time=$(fuzz_timeout_seconds)
+	@cd internal/integration_test/fuzz && cargo fuzz run basic -- -rss_limit_mb=8192 -max_total_time=$(fuzz_timeout_seconds)
+	@cd internal/integration_test/fuzz && cargo fuzz run memory_no_diff -- -rss_limit_mb=8192 -max_total_time=$(fuzz_timeout_seconds)
+	@cd internal/integration_test/fuzz && cargo fuzz run validation -- -rss_limit_mb=8192 -max_total_time=$(fuzz_timeout_seconds)
 
 #### CLI release related ####
 

@@ -4,9 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"time"
 
-	"github.com/tetratelabs/wazero/internal/fsapi"
+	experimentalsys "github.com/tetratelabs/wazero/experimental/sys"
 	"github.com/tetratelabs/wazero/internal/platform"
 	"github.com/tetratelabs/wazero/sys"
 )
@@ -108,11 +109,12 @@ func (c *Context) RandSource() io.Reader {
 	return c.randSource
 }
 
-// DefaultContext returns Context with no values set except a possible nil fs.FS
+// DefaultContext returns Context with no values set except a possible nil
+// sys.FS.
 //
-// This is only used for testing.
-func DefaultContext(fs fsapi.FS) *Context {
-	if sysCtx, err := NewContext(0, nil, nil, nil, nil, nil, nil, nil, 0, nil, 0, nil, nil, fs); err != nil {
+// Note: This is only used for testing.
+func DefaultContext(fs experimentalsys.FS) *Context {
+	if sysCtx, err := NewContext(0, nil, nil, nil, nil, nil, nil, nil, 0, nil, 0, nil, nil, []experimentalsys.FS{fs}, []string{""}, nil); err != nil {
 		panic(fmt.Errorf("BUG: DefaultContext should never error: %w", err))
 	} else {
 		return sysCtx
@@ -133,7 +135,8 @@ func NewContext(
 	nanotimeResolution sys.ClockResolution,
 	nanosleep sys.Nanosleep,
 	osyield sys.Osyield,
-	rootFS fsapi.FS,
+	fs []experimentalsys.FS, guestPaths []string,
+	tcpListeners []*net.TCPListener,
 ) (sysCtx *Context, err error) {
 	sysCtx = &Context{args: args, environ: environ}
 
@@ -185,11 +188,7 @@ func NewContext(
 		sysCtx.osyield = platform.FakeOsyield
 	}
 
-	if rootFS != nil {
-		err = sysCtx.NewFSContext(stdin, stdout, stderr, rootFS)
-	} else {
-		err = sysCtx.NewFSContext(stdin, stdout, stderr, fsapi.UnimplementedFS{})
-	}
+	err = sysCtx.InitFSContext(stdin, stdout, stderr, fs, guestPaths, tcpListeners)
 
 	return
 }

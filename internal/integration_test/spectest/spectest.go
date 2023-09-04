@@ -10,17 +10,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
-	"github.com/tetratelabs/wazero/internal/filecache"
 	"github.com/tetratelabs/wazero/internal/moremath"
-	"github.com/tetratelabs/wazero/internal/sys"
 	"github.com/tetratelabs/wazero/internal/testing/require"
 	"github.com/tetratelabs/wazero/internal/wasm"
-	binaryformat "github.com/tetratelabs/wazero/internal/wasm/binary"
 	"github.com/tetratelabs/wazero/internal/wasmruntime"
 )
 
-// TODO: complete porting this to wazero API
 type (
 	testbase struct {
 		SourceFile string    `json:"source_filename"`
@@ -320,278 +317,206 @@ func (c command) expectedError() (err error) {
 //
 //	cd testdata; wat2wasm --debug-names spectest.wat
 //
+// This module is required by some test cases, and instantiated before running cases.
+// See https://github.com/WebAssembly/spec/blob/wg-1.0/test/core/imports.wast
+// See https://github.com/WebAssembly/spec/blob/wg-1.0/interpreter/script/js.ml#L13-L25
+//
 //go:embed testdata/spectest.wasm
 var spectestWasm []byte
 
-// addSpectestModule adds a module that drops inputs and returns globals as 666 per the default test harness.
-//
-// See https://github.com/WebAssembly/spec/blob/wg-1.0/test/core/imports.wast
-// See https://github.com/WebAssembly/spec/blob/wg-1.0/interpreter/script/js.ml#L13-L25
-func addSpectestModule(t *testing.T, ctx context.Context, s *wasm.Store, enabledFeatures api.CoreFeatures) {
-	mod, err := binaryformat.DecodeModule(spectestWasm, api.CoreFeaturesV2, wasm.MemoryLimitPages, false, false, false)
-	require.NoError(t, err)
-
-	maybeSetMemoryCap(mod)
-	mod.BuildMemoryDefinitions()
-
-	err = mod.Validate(enabledFeatures)
-	require.NoError(t, err)
-
-	err = s.Engine.CompileModule(ctx, mod, nil, false)
-	require.NoError(t, err)
-
-	typeIDs, err := s.GetFunctionTypeIDs(mod.TypeSection)
-	require.NoError(t, err)
-
-	_, err = s.Instantiate(ctx, mod, mod.NameSection.ModuleName, sys.DefaultContext(nil), typeIDs)
-	require.NoError(t, err)
-}
-
-// maybeSetMemoryCap assigns wasm.Memory Cap to Min, which is what wazero.CompileModule would do.
-func maybeSetMemoryCap(mod *wasm.Module) {
-	if mem := mod.MemorySection; mem != nil {
-		mem.Cap = mem.Min
-	}
-}
-
 // Run runs all the test inside the testDataFS file system where all the cases are described
 // via JSON files created from wast2json.
-func Run(t *testing.T, testDataFS embed.FS, ctx context.Context, fc filecache.Cache, newEngine func(context.Context, api.CoreFeatures, filecache.Cache) wasm.Engine, enabledFeatures api.CoreFeatures) {
+func Run(t *testing.T, testDataFS embed.FS, ctx context.Context, config wazero.RuntimeConfig) {
 	files, err := testDataFS.ReadDir("testdata")
 	require.NoError(t, err)
 
-	jsonfiles := make([]string, 0, len(files))
+	caseNames := make([]string, 0, len(files))
 	for _, f := range files {
 		filename := f.Name()
 		if strings.HasSuffix(filename, ".json") {
-			jsonfiles = append(jsonfiles, testdataPath(filename))
+			caseNames = append(caseNames, strings.TrimSuffix(filename, ".json"))
 		}
 	}
 
 	// If the go:embed path resolution was wrong, this fails.
 	// https://github.com/tetratelabs/wazero/issues/247
-	require.True(t, len(jsonfiles) > 0, "len(jsonfiles)=%d (not greater than one)", len(jsonfiles))
+	require.True(t, len(caseNames) > 0, "len(caseNames)=%d (not greater than zero)", len(caseNames))
 
-	for _, f := range jsonfiles {
-		raw, err := testDataFS.ReadFile(f)
-		require.NoError(t, err)
-
-		var base testbase
-		require.NoError(t, json.Unmarshal(raw, &base))
-
-		wastName := basename(base.SourceFile)
-
-		t.Run(wastName, func(t *testing.T) {
-			s := wasm.NewStore(enabledFeatures, newEngine(ctx, enabledFeatures, fc))
-			addSpectestModule(t, ctx, s, enabledFeatures)
-
-			var lastInstantiatedModuleName string
-			for _, c := range base.Commands {
-				t.Run(fmt.Sprintf("%s/line:%d", c.CommandType, c.Line), func(t *testing.T) {
-					msg := fmt.Sprintf("%s:%d %s", wastName, c.Line, c.CommandType)
-					switch c.CommandType {
-					case "module":
-						buf, err := testDataFS.ReadFile(testdataPath(c.Filename))
-						require.NoError(t, err, msg)
-						mod, err := binaryformat.DecodeModule(buf, enabledFeatures, wasm.MemoryLimitPages, false, false, false)
-						require.NoError(t, err, msg)
-						require.NoError(t, mod.Validate(enabledFeatures))
-						mod.AssignModuleID(buf, false, false)
-
-						moduleName := c.Name
-						if moduleName == "" {
-							// Use the file name as the name.
-							moduleName = c.Filename
-						}
-
-						maybeSetMemoryCap(mod)
-						mod.BuildMemoryDefinitions()
-						err = s.Engine.CompileModule(ctx, mod, nil, false)
-						require.NoError(t, err, msg)
-
-						typeIDs, err := s.GetFunctionTypeIDs(mod.TypeSection)
-						require.NoError(t, err)
-
-						_, err = s.Instantiate(ctx, mod, moduleName, nil, typeIDs)
-						lastInstantiatedModuleName = moduleName
-						require.NoError(t, err)
-					case "register":
-						src := c.Name
-						if src == "" {
-							src = lastInstantiatedModuleName
-						}
-						require.NoError(t, s.AliasModule(src, c.As))
-						lastInstantiatedModuleName = c.As
-					case "assert_return", "action":
-						moduleName := lastInstantiatedModuleName
-						if c.Action.Module != "" {
-							moduleName = c.Action.Module
-						}
-						switch c.Action.ActionType {
-						case "invoke":
-							args, exps := c.getAssertReturnArgsExps()
-							msg = fmt.Sprintf("%s invoke %s (%s)", msg, c.Action.Field, c.Action.Args)
-							if c.Action.Module != "" {
-								msg += " in module " + c.Action.Module
-							}
-							vals, types, err := callFunction(s, ctx, moduleName, c.Action.Field, args...)
-							require.NoError(t, err, msg)
-							require.Equal(t, len(exps), len(vals), msg)
-							laneTypes := map[int]string{}
-							for i, expV := range c.Exps {
-								if expV.ValType == "v128" {
-									laneTypes[i] = expV.LaneType
-								}
-							}
-							matched, valuesMsg := valuesEq(vals, exps, types, laneTypes)
-							require.True(t, matched, msg+"\n"+valuesMsg)
-						case "get":
-							_, exps := c.getAssertReturnArgsExps()
-							require.Equal(t, 1, len(exps))
-							msg = fmt.Sprintf("%s invoke %s (%s)", msg, c.Action.Field, c.Action.Args)
-							if c.Action.Module != "" {
-								msg += " in module " + c.Action.Module
-							}
-							module := s.Module(moduleName)
-							require.NotNil(t, module)
-							global := module.ExportedGlobal(c.Action.Field)
-							require.NotNil(t, global)
-							var expType wasm.ValueType
-							switch c.Exps[0].ValType {
-							case "i32":
-								expType = wasm.ValueTypeI32
-							case "i64":
-								expType = wasm.ValueTypeI64
-							case "f32":
-								expType = wasm.ValueTypeF32
-							case "f64":
-								expType = wasm.ValueTypeF64
-							}
-							require.Equal(t, expType, global.Type(), msg)
-							require.Equal(t, exps[0], global.Get(), msg)
-						default:
-							t.Fatalf("unsupported action type type: %v", c)
-						}
-					case "assert_malformed":
-						if c.ModuleType != "text" {
-							// We don't support direct loading of wast yet.
-							buf, err := testDataFS.ReadFile(testdataPath(c.Filename))
-							require.NoError(t, err, msg)
-							requireInstantiationError(t, ctx, s, buf, msg)
-						}
-					case "assert_trap":
-						moduleName := lastInstantiatedModuleName
-						if c.Action.Module != "" {
-							moduleName = c.Action.Module
-						}
-						switch c.Action.ActionType {
-						case "invoke":
-							args := c.getAssertReturnArgs()
-							msg = fmt.Sprintf("%s invoke %s (%s)", msg, c.Action.Field, c.Action.Args)
-							if c.Action.Module != "" {
-								msg += " in module " + c.Action.Module
-							}
-							_, _, err := callFunction(s, ctx, moduleName, c.Action.Field, args...)
-							require.ErrorIs(t, err, c.expectedError(), msg)
-						default:
-							t.Fatalf("unsupported action type type: %v", c)
-						}
-					case "assert_invalid":
-						if c.ModuleType == "text" {
-							// We don't support direct loading of wast yet.
-							t.Skip()
-						}
-						buf, err := testDataFS.ReadFile(testdataPath(c.Filename))
-						require.NoError(t, err, msg)
-						requireInstantiationError(t, ctx, s, buf, msg)
-					case "assert_exhaustion":
-						moduleName := lastInstantiatedModuleName
-						switch c.Action.ActionType {
-						case "invoke":
-							args := c.getAssertReturnArgs()
-							msg = fmt.Sprintf("%s invoke %s (%s)", msg, c.Action.Field, c.Action.Args)
-							if c.Action.Module != "" {
-								msg += " in module " + c.Action.Module
-							}
-							_, _, err := callFunction(s, ctx, moduleName, c.Action.Field, args...)
-							require.ErrorIs(t, err, wasmruntime.ErrRuntimeStackOverflow, msg)
-						default:
-							t.Fatalf("unsupported action type type: %v", c)
-						}
-					case "assert_unlinkable":
-						if c.ModuleType == "text" {
-							// We don't support direct loading of wast yet.
-							t.Skip()
-						}
-						buf, err := testDataFS.ReadFile(testdataPath(c.Filename))
-						require.NoError(t, err, msg)
-						requireInstantiationError(t, ctx, s, buf, msg)
-					case "assert_uninstantiable":
-						buf, err := testDataFS.ReadFile(testdataPath(c.Filename))
-						require.NoError(t, err, msg)
-						if c.Text == "out of bounds table access" {
-							// This is not actually an instantiation error, but assert_trap in the original wast, but wast2json translates it to assert_uninstantiable.
-							// Anyway, this spectest case expects the error due to active element offset ouf of bounds
-							// "after" instantiation while retaining function instances used for elements.
-							// https://github.com/WebAssembly/spec/blob/d39195773112a22b245ffbe864bab6d1182ccb06/test/core/linking.wast#L264-L274
-							//
-							// In practice, such a module instance can be used for invoking functions without any issue. In addition, we have to
-							// retain functions after the expected "instantiation" failure, so in wazero we choose to not raise error in that case.
-							mod, err := binaryformat.DecodeModule(buf, s.EnabledFeatures, wasm.MemoryLimitPages, false, false, false)
-							require.NoError(t, err, msg)
-
-							err = mod.Validate(s.EnabledFeatures)
-							require.NoError(t, err, msg)
-
-							mod.AssignModuleID(buf, false, false)
-
-							maybeSetMemoryCap(mod)
-							err = s.Engine.CompileModule(ctx, mod, nil, false)
-							require.NoError(t, err, msg)
-
-							typeIDs, err := s.GetFunctionTypeIDs(mod.TypeSection)
-							require.NoError(t, err)
-
-							_, err = s.Instantiate(ctx, mod, t.Name(), nil, typeIDs)
-							require.NoError(t, err, msg)
-						} else {
-							requireInstantiationError(t, ctx, s, buf, msg)
-						}
-
-					default:
-						t.Fatalf("unsupported command type: %s", c)
-					}
-				})
-			}
-		})
+	for _, f := range caseNames {
+		RunCase(t, testDataFS, f, ctx, config, -1, 0, math.MaxInt)
 	}
 }
 
-func requireInstantiationError(t *testing.T, ctx context.Context, s *wasm.Store, buf []byte, msg string) {
-	mod, err := binaryformat.DecodeModule(buf, s.EnabledFeatures, wasm.MemoryLimitPages, false, false, false)
-	if err != nil {
-		return
-	}
-
-	err = mod.Validate(s.EnabledFeatures)
-	if err != nil {
-		return
-	}
-
-	mod.AssignModuleID(buf, false, false)
-
-	maybeSetMemoryCap(mod)
-	mod.BuildMemoryDefinitions()
-	err = s.Engine.CompileModule(ctx, mod, nil, false)
-	if err != nil {
-		return
-	}
-
-	typeIDs, err := s.GetFunctionTypeIDs(mod.TypeSection)
+// RunCase runs the test case described by the given spectest file name (without .wast!) in the testDataFS file system.
+// lineBegin and lineEnd are the line numbers to run. If lineBegin == 0 and lineEnd == math.MaxInt, all the lines are run.
+//
+// For example, if you want to run memory_grow.wast:66 to 70, you can do:
+//
+//	RunCase(t, testDataFS, "memory_grow", ctx, config, mandatoryLine, 66, 70)
+//
+// where mandatoryLine is the line number which can be run regardless of the lineBegin and lineEnd. It is useful when
+// we only want to run specific command while running "module" command to instantiate a module. If you don't need it,
+// just pass -1.
+func RunCase(t *testing.T, testDataFS embed.FS, f string, ctx context.Context, config wazero.RuntimeConfig, mandatoryLine, lineBegin, lineEnd int) {
+	raw, err := testDataFS.ReadFile(testdataPath(f + ".json"))
 	require.NoError(t, err)
 
-	_, err = s.Instantiate(ctx, mod, t.Name(), nil, typeIDs)
-	require.Error(t, err, msg)
+	var base testbase
+	require.NoError(t, json.Unmarshal(raw, &base))
+
+	wastName := basename(base.SourceFile)
+
+	t.Run(wastName, func(t *testing.T) {
+		r := wazero.NewRuntimeWithConfig(ctx, config)
+		defer func() {
+			require.NoError(t, r.Close(ctx))
+		}()
+
+		_, err := r.InstantiateWithConfig(ctx, spectestWasm, wazero.NewModuleConfig())
+		require.NoError(t, err)
+
+		modules := make(map[string]api.Module)
+		var lastInstantiatedModule api.Module
+		for i := 0; i < len(base.Commands); i++ {
+			c := &base.Commands[i]
+			line := c.Line
+			if mandatoryLine > -1 && c.Line == mandatoryLine {
+			} else if line < lineBegin || line > lineEnd {
+				continue
+			}
+			t.Run(fmt.Sprintf("%s/line:%d", c.CommandType, c.Line), func(t *testing.T) {
+				msg := fmt.Sprintf("%s:%d %s", wastName, c.Line, c.CommandType)
+				switch c.CommandType {
+				case "module":
+					buf, err := testDataFS.ReadFile(testdataPath(c.Filename))
+					require.NoError(t, err, msg)
+
+					var registeredName string
+					if next := i + 1; next < len(base.Commands) && base.Commands[next].CommandType == "register" {
+						registeredName = base.Commands[next].As
+						i++ // Skip the entire "register" command.
+					}
+					mod, err := r.InstantiateWithConfig(ctx, buf, wazero.NewModuleConfig().WithName(registeredName))
+					require.NoError(t, err, msg)
+					if c.Name != "" {
+						modules[c.Name] = mod
+					}
+					lastInstantiatedModule = mod
+				case "assert_return", "action":
+					m := lastInstantiatedModule
+					if c.Action.Module != "" {
+						m = modules[c.Action.Module]
+					}
+					switch c.Action.ActionType {
+					case "invoke":
+						args, exps := c.getAssertReturnArgsExps()
+						msg = fmt.Sprintf("%s invoke %s (%s)", msg, c.Action.Field, c.Action.Args)
+						if c.Action.Module != "" {
+							msg += " in module " + c.Action.Module
+						}
+						fn := m.ExportedFunction(c.Action.Field)
+						results, err := fn.Call(ctx, args...)
+						require.NoError(t, err, msg)
+						require.Equal(t, len(exps), len(results), msg)
+						laneTypes := map[int]string{}
+						for i, expV := range c.Exps {
+							if expV.ValType == "v128" {
+								laneTypes[i] = expV.LaneType
+							}
+						}
+						matched, valuesMsg := valuesEq(results, exps, fn.Definition().ResultTypes(), laneTypes)
+						require.True(t, matched, msg+"\n"+valuesMsg)
+					case "get":
+						_, exps := c.getAssertReturnArgsExps()
+						require.Equal(t, 1, len(exps))
+						msg = fmt.Sprintf("%s invoke %s (%s)", msg, c.Action.Field, c.Action.Args)
+						if c.Action.Module != "" {
+							msg += " in module " + c.Action.Module
+						}
+						global := m.ExportedGlobal(c.Action.Field)
+						require.NotNil(t, global)
+						require.Equal(t, exps[0], global.Get(), msg)
+					default:
+						t.Fatalf("unsupported action type type: %v", c)
+					}
+				case "assert_malformed":
+					if c.ModuleType != "text" {
+						// We don't support direct loading of wast yet.
+						buf, err := testDataFS.ReadFile(testdataPath(c.Filename))
+						require.NoError(t, err, msg)
+						_, err = r.InstantiateWithConfig(ctx, buf, wazero.NewModuleConfig())
+						require.Error(t, err, msg)
+					}
+				case "assert_trap":
+					m := lastInstantiatedModule
+					if c.Action.Module != "" {
+						m = modules[c.Action.Module]
+					}
+					switch c.Action.ActionType {
+					case "invoke":
+						args := c.getAssertReturnArgs()
+						msg = fmt.Sprintf("%s invoke %s (%s)", msg, c.Action.Field, c.Action.Args)
+						if c.Action.Module != "" {
+							msg += " in module " + c.Action.Module
+						}
+						_, err := m.ExportedFunction(c.Action.Field).Call(ctx, args...)
+						require.ErrorIs(t, err, c.expectedError(), msg)
+					default:
+						t.Fatalf("unsupported action type type: %v", c)
+					}
+				case "assert_invalid":
+					if c.ModuleType == "text" {
+						// We don't support direct loading of wast yet.
+						t.Skip()
+					}
+					buf, err := testDataFS.ReadFile(testdataPath(c.Filename))
+					require.NoError(t, err, msg)
+					_, err = r.InstantiateWithConfig(ctx, buf, wazero.NewModuleConfig())
+					require.Error(t, err, msg)
+				case "assert_exhaustion":
+					switch c.Action.ActionType {
+					case "invoke":
+						args := c.getAssertReturnArgs()
+						msg = fmt.Sprintf("%s invoke %s (%s)", msg, c.Action.Field, c.Action.Args)
+						if c.Action.Module != "" {
+							msg += " in module " + c.Action.Module
+						}
+						_, err := lastInstantiatedModule.ExportedFunction(c.Action.Field).Call(ctx, args...)
+						require.ErrorIs(t, err, wasmruntime.ErrRuntimeStackOverflow, msg)
+					default:
+						t.Fatalf("unsupported action type type: %v", c)
+					}
+				case "assert_unlinkable":
+					if c.ModuleType == "text" {
+						// We don't support direct loading of wast yet.
+						t.Skip()
+					}
+					buf, err := testDataFS.ReadFile(testdataPath(c.Filename))
+					require.NoError(t, err, msg)
+					_, err = r.InstantiateWithConfig(ctx, buf, wazero.NewModuleConfig())
+					require.Error(t, err, msg)
+				case "assert_uninstantiable":
+					buf, err := testDataFS.ReadFile(testdataPath(c.Filename))
+					require.NoError(t, err, msg)
+					_, err = r.InstantiateWithConfig(ctx, buf, wazero.NewModuleConfig())
+					if c.Text == "out of bounds table access" {
+						// This is not actually an instantiation error, but assert_trap in the original wast, but wast2json translates it to assert_uninstantiable.
+						// Anyway, this spectest case expects the error due to active element offset ouf of bounds
+						// "after" instantiation while retaining function instances used for elements.
+						// https://github.com/WebAssembly/spec/blob/d39195773112a22b245ffbe864bab6d1182ccb06/test/core/linking.wast#L264-L274
+						//
+						// In practice, such a module instance can be used for invoking functions without any issue. In addition, we have to
+						// retain functions after the expected "instantiation" failure, so in wazero we choose to not raise error in that case.
+						require.NoError(t, err, msg)
+					} else {
+						require.Error(t, err, msg)
+					}
+				default:
+					t.Fatalf("unsupported command type: %s", c)
+				}
+			})
+		}
+	})
 }
 
 // basename avoids filepath.Base to ensure a forward slash is used even in Windows.
@@ -774,12 +699,4 @@ func f64Equal(expected, actual float64) (matched bool) {
 		matched = math.Float64bits(expected) == math.Float64bits(actual)
 	}
 	return
-}
-
-// callFunction is inlined here as the spectest needs to validate the signature was correct
-// TODO: This is likely already covered with unit tests!
-func callFunction(s *wasm.Store, ctx context.Context, moduleName, funcName string, params ...uint64) ([]uint64, []wasm.ValueType, error) {
-	fn := s.Module(moduleName).ExportedFunction(funcName)
-	results, err := fn.Call(ctx, params...)
-	return results, fn.Definition().ResultTypes(), err
 }

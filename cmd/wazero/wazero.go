@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,8 +20,11 @@ import (
 	"github.com/tetratelabs/wazero/experimental"
 	"github.com/tetratelabs/wazero/experimental/gojs"
 	"github.com/tetratelabs/wazero/experimental/logging"
+	"github.com/tetratelabs/wazero/experimental/sock"
+	"github.com/tetratelabs/wazero/experimental/sysfs"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 	"github.com/tetratelabs/wazero/internal/platform"
+	internalsys "github.com/tetratelabs/wazero/internal/sys"
 	"github.com/tetratelabs/wazero/internal/version"
 	"github.com/tetratelabs/wazero/sys"
 )
@@ -173,6 +177,12 @@ func doRun(args []string, stdOut io.Writer, stdErr logging.Writer) int {
 			"For example, -mount=/:/ or c:\\:/ makes the entire host volume writeable by wasm. "+
 			"For read-only mounts, append the suffix ':ro'.")
 
+	var listens sliceFlag
+	flags.Var(&listens, "listen",
+		"Open a TCP socket on the specified address of the form <host:port>. "+
+			"This may be specified multiple times. Host is optional, and port may be 0 to "+
+			"indicate a random port.")
+
 	var timeout time.Duration
 	flags.DurationVar(&timeout, "timeout", 0*time.Second,
 		"If a wasm binary runs longer than the given duration string, then exit abruptly. "+
@@ -184,7 +194,7 @@ func doRun(args []string, stdOut io.Writer, stdErr logging.Writer) int {
 	var hostlogging logScopesFlag
 	flags.Var(&hostlogging, "hostlogging",
 		"A comma-separated list of host function scopes to log to stderr. "+
-			"This may be specified multiple times. Supported values: all,clock,filesystem,memory,proc,poll,random")
+			"This may be specified multiple times. Supported values: all,clock,filesystem,memory,proc,poll,random,sock")
 
 	var cpuProfile string
 	var memProfile string
@@ -282,6 +292,12 @@ func doRun(args []string, stdOut io.Writer, stdErr logging.Writer) int {
 		return 1
 	}
 
+	if rc, sockCfg := validateListens(listens, stdErr); rc != 0 {
+		return rc
+	} else {
+		ctx = sock.WithConfig(ctx, sockCfg)
+	}
+
 	rt := wazero.NewRuntimeWithConfig(ctx, rtc)
 	defer rt.Close(ctx)
 
@@ -301,16 +317,16 @@ func doRun(args []string, stdOut io.Writer, stdErr logging.Writer) int {
 		conf = conf.WithEnv(env[i], env[i+1])
 	}
 
-	code, err := rt.CompileModule(ctx, wasm)
+	guest, err := rt.CompileModule(ctx, wasm)
 	if err != nil {
 		fmt.Fprintf(stdErr, "error compiling wasm binary: %v\n", err)
 		return 1
 	}
 
-	switch detectImports(code.ImportedFunctions()) {
+	switch detectImports(guest.ImportedFunctions()) {
 	case modeWasi:
 		wasi_snapshot_preview1.MustInstantiate(ctx, rt)
-		_, err = rt.InstantiateModule(ctx, code, conf)
+		_, err = rt.InstantiateModule(ctx, guest, conf)
 	case modeWasiUnstable:
 		// Instantiate the current WASI functions under the wasi_unstable
 		// instead of wasi_snapshot_preview1.
@@ -319,12 +335,20 @@ func doRun(args []string, stdOut io.Writer, stdErr logging.Writer) int {
 		_, err = wasiBuilder.Instantiate(ctx)
 		if err == nil {
 			// Instantiate our binary, but using the old import names.
-			_, err = rt.InstantiateModule(ctx, code, conf)
+			_, err = rt.InstantiateModule(ctx, guest, conf)
 		}
 	case modeGo:
-		gojs.MustInstantiate(ctx, rt)
+		// Fail fast on multiple mounts with the deprecated GOOS=js.
+		// GOOS=js will be removed in favor of GOOS=wasip1 once v1.22 is out.
+		if count := len(mounts); count > 1 || (count == 1 && rootPath == "") {
+			fmt.Fprintf(stdErr, "invalid mount: only root mounts supported in GOOS=js: %v\n"+
+				"Consider switching to GOOS=wasip1.\n", mounts)
+			return 1
+		}
 
-		config := gojs.NewConfig(conf).WithOSUser()
+		gojs.MustInstantiate(ctx, rt, guest)
+
+		config := gojs.NewConfig(conf)
 
 		// Strip the volume of the path, for example C:\
 		rootDir := rootPath[len(filepath.VolumeName(rootPath)):]
@@ -336,9 +360,9 @@ func doRun(args []string, stdOut io.Writer, stdErr logging.Writer) int {
 			config = config.WithOSWorkdir()
 		}
 
-		err = gojs.Run(ctx, rt, code, config)
+		err = gojs.Run(ctx, rt, guest, config)
 	case modeDefault:
-		_, err = rt.InstantiateModule(ctx, code, conf)
+		_, err = rt.InstantiateModule(ctx, guest, conf)
 	}
 
 	if err != nil {
@@ -371,18 +395,13 @@ func validateMounts(mounts sliceFlag, stdErr logging.Writer) (rc int, rootPath s
 			readOnly = true
 		}
 
-		// TODO(anuraaga): Support wasm paths with colon in them.
+		// TODO: Support wasm paths with colon in them.
 		var dir, guestPath string
 		if clnIdx := strings.LastIndexByte(mount, ':'); clnIdx != -1 {
 			dir, guestPath = mount[:clnIdx], mount[clnIdx+1:]
 		} else {
 			dir = mount
 			guestPath = dir
-		}
-
-		// Provide a better experience if duplicates are found later.
-		if guestPath == "" {
-			guestPath = "/"
 		}
 
 		// Eagerly validate the mounts as we know they should be on the host.
@@ -400,17 +419,39 @@ func validateMounts(mounts sliceFlag, stdErr logging.Writer) (rc int, rootPath s
 			fmt.Fprintf(stdErr, "invalid mount: path %q is not a directory\n", dir)
 		}
 
+		root := sysfs.DirFS(dir)
 		if readOnly {
-			config = config.WithReadOnlyDirMount(dir, guestPath)
-		} else {
-			config = config.WithDirMount(dir, guestPath)
+			root = &sysfs.ReadFS{FS: root}
 		}
 
-		if guestPath == "/" {
+		config = config.(sysfs.FSConfig).WithSysFSMount(root, guestPath)
+
+		if internalsys.StripPrefixesAndTrailingSlash(guestPath) == "" {
 			rootPath = dir
 		}
 	}
 	return 0, rootPath, config
+}
+
+// validateListens returns a non-nil net.Config, if there were any listen flags.
+func validateListens(listens sliceFlag, stdErr logging.Writer) (rc int, config sock.Config) {
+	for _, listen := range listens {
+		idx := strings.LastIndexByte(listen, ':')
+		if idx < 0 {
+			fmt.Fprintln(stdErr, "invalid listen")
+			return rc, config
+		}
+		port, err := strconv.Atoi(listen[idx+1:])
+		if err != nil {
+			fmt.Fprintln(stdErr, "invalid listen port:", err)
+			return rc, config
+		}
+		if config == nil {
+			config = sock.NewConfig()
+		}
+		config = config.WithTCPListener(listen[:idx], port)
+	}
+	return
 }
 
 const (
@@ -430,7 +471,7 @@ func detectImports(imports []api.FunctionDefinition) importMode {
 			return modeWasi
 		case "wasi_unstable":
 			return modeWasiUnstable
-		case "go":
+		case "go", "gojs":
 			return modeGo
 		}
 	}
@@ -558,6 +599,8 @@ func (f *logScopesFlag) Set(input string) error {
 			*f |= logScopesFlag(logging.LogScopePoll)
 		case "random":
 			*f |= logScopesFlag(logging.LogScopeRandom)
+		case "sock":
+			*f |= logScopesFlag(logging.LogScopeSock)
 		default:
 			return errors.New("not a log scope")
 		}
