@@ -2897,10 +2897,7 @@ func (c *arm64Compiler) compileMemoryAlignmentCheck(baseRegister asm.Register, t
 		checkBits = 0b111
 	}
 	c.assembler.CompileRegisterAndConstToRegister(arm64.ANDS, baseRegister, checkBits, arm64.RegRZR)
-	aligned := c.assembler.CompileJump(arm64.BCONDEQ)
-
-	c.compileExitFromNativeCode(nativeCallStatusUnalignedAtomic)
-	c.assembler.SetJumpTargetOnNext(aligned)
+	c.compileMaybeExitFromNativeCode(arm64.BCONDEQ, nativeCallStatusUnalignedAtomic)
 }
 
 // compileMemoryGrow implements compileMemoryGrow variants for arm64 architecture.

@@ -440,8 +440,8 @@ const (
 	nativeCallStatusCodeTypeMismatchOnIndirectCall
 	nativeCallStatusIntegerOverflow
 	nativeCallStatusIntegerDivisionByZero
-	nativeCallStatusModuleClosed
 	nativeCallStatusUnalignedAtomic
+	nativeCallStatusModuleClosed
 )
 
 // causePanic causes a panic with the corresponding error to the nativeCallStatusCode.
