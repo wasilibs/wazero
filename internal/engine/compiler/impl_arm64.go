@@ -4829,6 +4829,7 @@ func (c *arm64Compiler) compileAtomicMemoryNotify(o *wazeroir.UnionOperation) er
 	if err != nil {
 		return err
 	}
+	c.markRegisterUsed(count.register)
 
 	baseReg, err := c.compileMemoryAccessBaseSetup(offset, 4)
 	if err != nil {
@@ -4850,6 +4851,8 @@ func (c *arm64Compiler) compileAtomicMemoryNotify(o *wazeroir.UnionOperation) er
 	// Then, the result was pushed.
 	v := c.locationStack.pushRuntimeValueLocationOnStack()
 	v.valueType = runtimeValueTypeI32
+
+	c.markRegisterUnused(count.register)
 
 	// After return, we re-initialize reserved registers just like preamble of functions.
 	c.compileReservedStackBasePointerRegisterInitialization()
