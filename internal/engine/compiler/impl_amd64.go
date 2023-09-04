@@ -4507,7 +4507,8 @@ func (c *amd64Compiler) compileAtomicLoad16(o *wazeroir.UnionOperation) error {
 }
 
 func (c *amd64Compiler) compileAtomicLoadImpl(
-	inst asm.Instruction, offset uint32, targetSizeInBytes int64, resultRuntimeValueType runtimeValueType) error {
+	inst asm.Instruction, offset uint32, targetSizeInBytes int64, resultRuntimeValueType runtimeValueType,
+) error {
 	reg, err := c.compileMemoryAccessCeilSetup(offset, targetSizeInBytes)
 	if err != nil {
 		return err
@@ -4549,7 +4550,8 @@ func (c *amd64Compiler) compileAtomicStore16(o *wazeroir.UnionOperation) error {
 }
 
 func (c *amd64Compiler) compileAtomicStoreImpl(
-	inst asm.Instruction, offset uint32, targetSizeInBytes int64) error {
+	inst asm.Instruction, offset uint32, targetSizeInBytes int64,
+) error {
 	val := c.locationStack.pop()
 	if err := c.compileEnsureOnRegister(val); err != nil {
 		return err
@@ -4768,7 +4770,8 @@ func (c *amd64Compiler) compileAtomicXchgImpl(inst asm.Instruction, offsetConst 
 }
 
 func (c *amd64Compiler) compileAtomicRMWCASLoopImpl(rmwInst asm.Instruction,
-	offsetConst uint32, targetSizeInBytes int64, resultRuntimeValueType runtimeValueType) error {
+	offsetConst uint32, targetSizeInBytes int64, resultRuntimeValueType runtimeValueType,
+) error {
 	const resultRegister = amd64.RegAX
 
 	var copyInst asm.Instruction

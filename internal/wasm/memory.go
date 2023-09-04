@@ -4,7 +4,6 @@ import (
 	"container/list"
 	"encoding/binary"
 	"fmt"
-	"github.com/tetratelabs/wazero/internal/platform"
 	"math"
 	"reflect"
 	"sync"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/tetratelabs/wazero/api"
 	"github.com/tetratelabs/wazero/internal/internalapi"
+	"github.com/tetratelabs/wazero/internal/platform"
 )
 
 const (
