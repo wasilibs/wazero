@@ -637,6 +637,14 @@ func InstructionName(instruction asm.Instruction) string {
 		return "CMPL"
 	case CMPQ:
 		return "CMPQ"
+	case CMPXCHGQ:
+		return "CMPXCHGQ"
+	case CMPXCHGL:
+		return "CMPXCHGL"
+	case CMPXCHGW:
+		return "CMPXCHGW"
+	case CMPXCHGB:
+		return "CMPXCHGB"
 	case COMISD:
 		return "COMISD"
 	case COMISS:
@@ -871,6 +879,12 @@ func InstructionName(instruction asm.Instruction) string {
 		return "XORQ"
 	case XCHGQ:
 		return "XCHGQ"
+	case XCHGW:
+		return "XCHGW"
+	case XCHGL:
+		return "XCHGL"
+	case XCHGB:
+		return "XCHGB"
 	case RET:
 		return "RET"
 	case JMP:
@@ -987,6 +1001,12 @@ func InstructionName(instruction asm.Instruction) string {
 		return "PUNPCKHBW"
 	case NEGQ:
 		return "NEGQ"
+	case NEGL:
+		return "NEGL"
+	case NEGW:
+		return "NEGW"
+	case NEGB:
+		return "NEGB"
 	case NONE:
 		return "NONE"
 	case CMPPS:
@@ -1107,6 +1127,16 @@ func InstructionName(instruction asm.Instruction) string {
 		return "CVTTPS2DQ"
 	case CVTDQ2PS:
 		return "CVTDQ2PS"
+	case XADDB:
+		return "XADDB"
+	case XADDW:
+		return "XADDW"
+	case XADDL:
+		return "XADDL"
+	case XADDQ:
+		return "XADDQ"
+	case MFENCE:
+		return "MFENCE"
 	case MOVUPD:
 		return "MOVUPD"
 	case SHUFPS:
