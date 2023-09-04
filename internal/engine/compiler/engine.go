@@ -1025,7 +1025,8 @@ const (
 	builtinFunctionIndexCheckExitCode
 	// builtinFunctionIndexBreakPoint is internal (only for wazero developers). Disabled by default.
 	builtinFunctionIndexBreakPoint
-	builtinFunctionMemoryWait
+	builtinFunctionMemoryWait32
+	builtinFunctionMemoryWait64
 	builtinFunctionMemoryNotify
 )
 
@@ -1073,8 +1074,10 @@ entry:
 				ce.builtinFunctionGrowStack(caller.parent.stackPointerCeil)
 			case builtinFunctionIndexTableGrow:
 				ce.builtinFunctionTableGrow(caller.moduleInstance.Tables)
-			case builtinFunctionMemoryWait:
-				ce.builtinFunctionMemoryWait(caller.moduleInstance.MemoryInstance)
+			case builtinFunctionMemoryWait32:
+				ce.builtinFunctionMemoryWait32(caller.moduleInstance.MemoryInstance)
+			case builtinFunctionMemoryWait64:
+				ce.builtinFunctionMemoryWait64(caller.moduleInstance.MemoryInstance)
 			case builtinFunctionMemoryNotify:
 				ce.builtinFunctionMemoryNotify(caller.moduleInstance.MemoryInstance)
 			case builtinFunctionIndexFunctionListenerBefore:
@@ -1152,15 +1155,42 @@ func (ce *callEngine) builtinFunctionTableGrow(tables []*wasm.TableInstance) {
 	ce.pushValue(uint64(res))
 }
 
-func (ce *callEngine) builtinFunctionMemoryWait(mem *wasm.MemoryInstance) {
+func (ce *callEngine) builtinFunctionMemoryWait32(mem *wasm.MemoryInstance) {
+	if !mem.Shared {
+		panic(wasmruntime.ErrRuntimeExpectedSharedMemory)
+	}
+
+	loaded := uint32(ce.popValue())
+	timeout := ce.popValue()
+	exp := uint32(ce.popValue())
+	addr := ce.popValue()
+
+	if exp != loaded {
+		ce.pushValue(1)
+		return
+	}
+
+	offset := uint32(uintptr(addr) - uintptr(unsafe.Pointer(&mem.Buffer[0])))
+	tooMany, timedOut := mem.Wait(offset, int64(timeout))
+	if tooMany {
+		// TODO(anuraaga): Handle this correctly
+		panic(wasmruntime.ErrRuntimeTooManyWaiters)
+	} else if timedOut {
+		ce.pushValue(2)
+	} else {
+		ce.pushValue(0)
+	}
+}
+
+func (ce *callEngine) builtinFunctionMemoryWait64(mem *wasm.MemoryInstance) {
 	if !mem.Shared {
 		panic(wasmruntime.ErrRuntimeExpectedSharedMemory)
 	}
 
 	loaded := ce.popValue()
-	addr := ce.popValue()
 	timeout := ce.popValue()
 	exp := ce.popValue()
+	addr := ce.popValue()
 
 	if exp != loaded {
 		ce.pushValue(1)

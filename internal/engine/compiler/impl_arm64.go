@@ -4745,6 +4745,7 @@ func (c *arm64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) erro
 		loadInst          asm.Instruction
 		vt                runtimeValueType
 		targetSizeInBytes int64
+		waitFunc          wasm.Index
 	)
 
 	unsignedType := wazeroir.UnsignedType(o.B1)
@@ -4755,10 +4756,12 @@ func (c *arm64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) erro
 		loadInst = arm64.LDARW
 		vt = runtimeValueTypeI32
 		targetSizeInBytes = 32 / 8
+		waitFunc = builtinFunctionMemoryWait32
 	case wazeroir.UnsignedTypeI64:
 		loadInst = arm64.LDARD
 		vt = runtimeValueTypeI64
 		targetSizeInBytes = 64 / 8
+		waitFunc = builtinFunctionMemoryWait64
 	}
 
 	timeout, err := c.popValueOnRegister()
@@ -4786,11 +4789,11 @@ func (c *arm64Compiler) compileAtomicMemoryWait(o *wazeroir.UnionOperation) erro
 	c.assembler.CompileMemoryWithRegisterSourceToRegister(loadInst, baseReg, resultRegister)
 
 	// Push address, values, and timeout back to read in Go
+	c.pushRuntimeValueLocationOnRegister(baseReg, runtimeValueTypeI64)
 	c.pushRuntimeValueLocationOnRegister(exp.register, vt)
 	c.pushRuntimeValueLocationOnRegister(timeout.register, runtimeValueTypeI64)
-	c.pushRuntimeValueLocationOnRegister(baseReg, runtimeValueTypeI64)
 	c.pushRuntimeValueLocationOnRegister(resultRegister, vt)
-	if err := c.compileCallGoFunction(nativeCallStatusCodeCallBuiltInFunction, builtinFunctionMemoryWait); err != nil {
+	if err := c.compileCallGoFunction(nativeCallStatusCodeCallBuiltInFunction, waitFunc); err != nil {
 		return err
 	}
 	// Address, values and timeout consumed in Go
