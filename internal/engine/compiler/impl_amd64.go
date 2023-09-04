@@ -5746,11 +5746,6 @@ func (c *amd64Compiler) compileModuleContextInitialization() error {
 		c.assembler.CompileRegisterToMemory(amd64.MOVQ, tmpRegister,
 			amd64ReservedRegisterForCallEngine, callEngineModuleContextMemoryInstanceOffset)
 
-		// Set length.
-		c.assembler.CompileMemoryToRegister(amd64.MOVQ, tmpRegister, memoryInstanceBufferLenOffset, tmpRegister2)
-		c.assembler.CompileRegisterToMemory(amd64.MOVQ, tmpRegister2,
-			amd64ReservedRegisterForCallEngine, callEngineModuleContextMemorySliceLenOffset)
-
 		// Set element zero address.
 		c.assembler.CompileMemoryToRegister(amd64.MOVQ, tmpRegister, memoryInstanceBufferOffset, tmpRegister2)
 		c.assembler.CompileRegisterToMemory(amd64.MOVQ, tmpRegister2,

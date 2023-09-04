@@ -240,6 +240,9 @@ func (m *MemoryInstance) Grow(delta uint32) (result uint32, ok bool) {
 	if newPages > m.Max {
 		return 0, false
 	} else if newPages > m.Cap { // grow the memory.
+		if m.Shared {
+			panic("shared memory cannot be grown, this is a bug in wazero")
+		}
 		m.Buffer = append(m.Buffer, make([]byte, MemoryPagesToBytesNum(delta))...)
 		m.Cap = newPages
 		return currentPages, true
@@ -402,7 +405,7 @@ func (m *MemoryInstance) Notify(offset uint32, count uint32) uint32 {
 	}
 
 	if ws.Len() == 0 {
-		m.waiters[offset] = nil
+		delete(m.waiters, offset)
 	}
 
 	return res

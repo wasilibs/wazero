@@ -4231,18 +4231,7 @@ func (c *arm64Compiler) compileModuleContextInitialization() error {
 			arm64ReservedRegisterForCallEngine, callEngineModuleContextMemoryInstanceOffset,
 		)
 
-		// Next, we write the memory length into ce.MemorySliceLen.
-		//
-		// "tmpY = [tmpX + memoryInstanceBufferLenOffset] (== len(memory.Buffer))"
-		c.assembler.CompileRegisterToRegister(arm64.MOVD, tmpX, tmpY)
-		c.assembler.CompileConstToRegister(arm64.ADD, memoryInstanceBufferLenOffset, tmpY)
-		c.assembler.CompileMemoryWithRegisterSourceToRegister(arm64.LDARD, tmpY, tmpY)
-		// "ce.MemorySliceLen = tmpY".
-		c.assembler.CompileRegisterToRegister(arm64.MOVD, arm64ReservedRegisterForCallEngine, arm64ReservedRegisterForTemporary)
-		c.assembler.CompileConstToRegister(arm64.ADD, callEngineModuleContextMemorySliceLenOffset, arm64ReservedRegisterForTemporary)
-		c.assembler.CompileRegisterToMemoryWithRegisterDest(arm64.STLRD, tmpY, arm64ReservedRegisterForTemporary)
-
-		// Finally, we write ce.memoryElement0Address.
+		// Then, we write ce.memoryElement0Address.
 		//
 		// "tmpY = *tmpX (== &memory.Buffer[0])"
 		c.assembler.CompileMemoryToRegister(

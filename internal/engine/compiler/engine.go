@@ -142,8 +142,6 @@ type (
 		// stackIterator provides a way to iterate over the stack for Listeners.
 		// It is setup and valid only during a call to a Listener hook.
 		stackIterator stackIterator
-
-		mux sync.Mutex
 	}
 
 	// moduleContext holds the per-function call specific module information.
@@ -352,7 +350,6 @@ const (
 	callEngineModuleContextModuleInstanceOffset                  = 8
 	callEngineModuleContextGlobalElement0AddressOffset           = 16
 	callEngineModuleContextMemoryElement0AddressOffset           = 24
-	callEngineModuleContextMemorySliceLenOffset                  = 32
 	callEngineModuleContextMemoryInstanceOffset                  = 40
 	callEngineModuleContextTablesElement0AddressOffset           = 48
 	callEngineModuleContextFunctionsElement0AddressOffset        = 56
@@ -1132,9 +1129,6 @@ func (ce *callEngine) builtinFunctionGrowStack(stackPointerCeil uint64) {
 }
 
 func (ce *callEngine) builtinFunctionMemoryGrow(mem *wasm.MemoryInstance) {
-	ce.mux.Lock()
-	defer ce.mux.Unlock()
-
 	newPages := ce.popValue()
 
 	if res, ok := mem.Grow(uint32(newPages)); !ok {
