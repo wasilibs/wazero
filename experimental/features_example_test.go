@@ -77,6 +77,7 @@ func ExampleCoreFeaturesThreads() {
 					log.Panicln(err)
 				}
 			}
+			runtime.KeepAlive(child)
 		}()
 	}
 	for i := 0; i < 8; i++ {
@@ -145,9 +146,8 @@ func createChildModule(rt wazero.Runtime, root api.Module, wasmCompiled wazero.C
 	runtime.SetFinalizer(ret, func(obj interface{}) {
 		cm := obj.(*childModule)
 		free := cm.mod.ExportedFunction("free")
-		if _, err := free.Call(ctx, uint64(cm.tlsBasePtr)); err != nil {
-			panic(err)
-		}
+		// Ignore errors since runtime may have been closed before this is called.
+		_, _ = free.Call(ctx, uint64(cm.tlsBasePtr))
 		_ = cm.mod.Close(context.Background())
 	})
 	return ret
