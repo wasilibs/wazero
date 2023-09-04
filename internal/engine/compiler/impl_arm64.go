@@ -4390,7 +4390,7 @@ func (c *arm64Compiler) compileAtomicLoad8(o *wazeroir.UnionOperation) error {
 	case wazeroir.UnsignedTypeI64:
 		vt = runtimeValueTypeI64
 	}
-	return c.compileAtomicLoadImpl(offset, arm64.LDRB, 1, vt)
+	return c.compileAtomicLoadImpl(offset, arm64.LDARB, 1, vt)
 }
 
 // compileAtomicLoad16 implements compiler.compileAtomicLoad16 for the arm64 architecture.
@@ -4406,7 +4406,7 @@ func (c *arm64Compiler) compileAtomicLoad16(o *wazeroir.UnionOperation) error {
 	case wazeroir.UnsignedTypeI64:
 		vt = runtimeValueTypeI64
 	}
-	return c.compileAtomicLoadImpl(offset, arm64.LDRH, 16/8, vt)
+	return c.compileAtomicLoadImpl(offset, arm64.LDARH, 16/8, vt)
 }
 
 func (c *arm64Compiler) compileAtomicLoadImpl(offsetArg uint32, loadInst asm.Instruction,
@@ -4449,13 +4449,13 @@ func (c *arm64Compiler) compileAtomicStore(o *wazeroir.UnionOperation) error {
 // compileAtomicStore8 implements compiler.compileAtomiStore8 for the arm64 architecture.
 func (c *arm64Compiler) compileAtomicStore8(o *wazeroir.UnionOperation) error {
 	offset := uint32(o.U2)
-	return c.compileAtomicStoreImpl(offset, arm64.STRB, 1)
+	return c.compileAtomicStoreImpl(offset, arm64.STLRB, 1)
 }
 
 // compileAtomicStore16 implements compiler.compileAtomicStore16 for the arm64 architecture.
 func (c *arm64Compiler) compileAtomicStore16(o *wazeroir.UnionOperation) error {
 	offset := uint32(o.U2)
-	return c.compileAtomicStoreImpl(offset, arm64.STRH, 16/8)
+	return c.compileAtomicStoreImpl(offset, arm64.STLRH, 16/8)
 }
 
 func (c *arm64Compiler) compileAtomicStoreImpl(offsetArg uint32, storeInst asm.Instruction, targetSizeInBytes int64) error {
