@@ -1160,26 +1160,14 @@ func (ce *callEngine) builtinFunctionMemoryWait32(mem *wasm.MemoryInstance) {
 		panic(wasmruntime.ErrRuntimeExpectedSharedMemory)
 	}
 
-	loaded := uint32(ce.popValue())
-	timeout := ce.popValue()
+	_ = uint32(ce.popValue())
+	timeout := int64(ce.popValue())
 	exp := uint32(ce.popValue())
 	addr := ce.popValue()
 
-	if exp != loaded {
-		ce.pushValue(1)
-		return
-	}
-
 	offset := uint32(uintptr(addr) - uintptr(unsafe.Pointer(&mem.Buffer[0])))
-	tooMany, timedOut := mem.Wait(offset, int64(timeout))
-	if tooMany {
-		// TODO(anuraaga): Handle this correctly
-		panic(wasmruntime.ErrRuntimeTooManyWaiters)
-	} else if timedOut {
-		ce.pushValue(2)
-	} else {
-		ce.pushValue(0)
-	}
+
+	ce.pushValue(mem.Wait32(offset, exp, timeout))
 }
 
 func (ce *callEngine) builtinFunctionMemoryWait64(mem *wasm.MemoryInstance) {
@@ -1187,26 +1175,14 @@ func (ce *callEngine) builtinFunctionMemoryWait64(mem *wasm.MemoryInstance) {
 		panic(wasmruntime.ErrRuntimeExpectedSharedMemory)
 	}
 
-	loaded := ce.popValue()
-	timeout := ce.popValue()
+	_ = ce.popValue()
+	timeout := int64(ce.popValue())
 	exp := ce.popValue()
 	addr := ce.popValue()
 
-	if exp != loaded {
-		ce.pushValue(1)
-		return
-	}
-
 	offset := uint32(uintptr(addr) - uintptr(unsafe.Pointer(&mem.Buffer[0])))
-	tooMany, timedOut := mem.Wait(offset, int64(timeout))
-	if tooMany {
-		// TODO(anuraaga): Handle this correctly
-		panic(wasmruntime.ErrRuntimeTooManyWaiters)
-	} else if timedOut {
-		ce.pushValue(2)
-	} else {
-		ce.pushValue(0)
-	}
+
+	ce.pushValue(mem.Wait64(offset, exp, timeout))
 }
 
 func (ce *callEngine) builtinFunctionMemoryNotify(mem *wasm.MemoryInstance) {

@@ -813,8 +813,8 @@ func TestMemoryInstance_WaitNotifyOnce(t *testing.T) {
 		// Reuse same offset 3 times to verify reuse
 		for i := 0; i < 3; i++ {
 			go func() {
-				tooMany, timedOut := mem.Wait(0, -1)
-				propagateWaitResult(t, ch, tooMany, timedOut)
+				res := mem.Wait32(0, 0, -1)
+				propagateWaitResult(t, ch, res)
 			}()
 
 			requireChannelEmpty(t, ch)
@@ -830,12 +830,12 @@ func TestMemoryInstance_WaitNotifyOnce(t *testing.T) {
 
 		ch := make(chan string)
 		go func() {
-			tooMany, timedOut := mem.Wait(0, -1)
-			propagateWaitResult(t, ch, tooMany, timedOut)
+			res := mem.Wait32(0, 0, -1)
+			propagateWaitResult(t, ch, res)
 		}()
 		go func() {
-			tooMany, timedOut := mem.Wait(0, -1)
-			propagateWaitResult(t, ch, tooMany, timedOut)
+			res := mem.Wait32(0, 0, -1)
+			propagateWaitResult(t, ch, res)
 		}()
 
 		requireChannelEmpty(t, ch)
@@ -850,12 +850,12 @@ func TestMemoryInstance_WaitNotifyOnce(t *testing.T) {
 
 		ch := make(chan string)
 		go func() {
-			tooMany, timedOut := mem.Wait(0, -1)
-			propagateWaitResult(t, ch, tooMany, timedOut)
+			res := mem.Wait32(0, 0, -1)
+			propagateWaitResult(t, ch, res)
 		}()
 		go func() {
-			tooMany, timedOut := mem.Wait(0, -1)
-			propagateWaitResult(t, ch, tooMany, timedOut)
+			res := mem.Wait32(0, 0, -1)
+			propagateWaitResult(t, ch, res)
 		}()
 
 		requireChannelEmpty(t, ch)
@@ -871,12 +871,12 @@ func TestMemoryInstance_WaitNotifyOnce(t *testing.T) {
 
 		ch := make(chan string)
 		go func() {
-			tooMany, timedOut := mem.Wait(0, -1)
-			propagateWaitResult(t, ch, tooMany, timedOut)
+			res := mem.Wait32(0, 0, -1)
+			propagateWaitResult(t, ch, res)
 		}()
 		go func() {
-			tooMany, timedOut := mem.Wait(1, -1)
-			propagateWaitResult(t, ch, tooMany, timedOut)
+			res := mem.Wait32(1, 268435456, -1)
+			propagateWaitResult(t, ch, res)
 		}()
 
 		requireChannelEmpty(t, ch)
@@ -892,8 +892,8 @@ func TestMemoryInstance_WaitNotifyOnce(t *testing.T) {
 
 		ch := make(chan string)
 		go func() {
-			tooMany, timedOut := mem.Wait(0, 10 /* ns */)
-			propagateWaitResult(t, ch, tooMany, timedOut)
+			res := mem.Wait32(0, 0, 10 /* ns */)
+			propagateWaitResult(t, ch, res)
 		}()
 
 		require.Equal(t, "timeout", <-ch)
@@ -915,13 +915,12 @@ func notifyWaiters(t *testing.T, mem *MemoryInstance, offset, count, exp int) {
 	}
 }
 
-func propagateWaitResult(t *testing.T, ch chan string, tooMany, timedOut bool) {
+func propagateWaitResult(t *testing.T, ch chan string, res uint64) {
 	t.Helper()
-	if tooMany {
-		ch <- "too many"
-	} else if timedOut {
+	switch res {
+	case 2:
 		ch <- "timeout"
-	} else {
+	default:
 		ch <- ""
 	}
 }

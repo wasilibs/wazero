@@ -98,7 +98,6 @@ func ExampleCoreFeaturesThreads() {
 type childModule struct {
 	mod        api.Module
 	tlsBasePtr uint32
-	exitCh     chan struct{}
 }
 
 var prevTID uint32
