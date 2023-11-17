@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tetratelabs/wazero"
-	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
-	"github.com/tetratelabs/wazero/internal/platform"
-	"github.com/tetratelabs/wazero/internal/testing/dwarftestdata"
-	"github.com/tetratelabs/wazero/internal/testing/require"
+	wazero "github.com/wasilibs/wazerox"
+	"github.com/wasilibs/wazerox/imports/wasi_snapshot_preview1"
+	"github.com/wasilibs/wazerox/internal/platform"
+	"github.com/wasilibs/wazerox/internal/testing/dwarftestdata"
+	"github.com/wasilibs/wazerox/internal/testing/require"
 )
 
 func TestWithDebugInfo(t *testing.T) {

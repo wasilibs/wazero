@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tetratelabs/wazero"
-	"github.com/tetratelabs/wazero/api"
-	"github.com/tetratelabs/wazero/internal/integration_test/spectest"
-	"github.com/tetratelabs/wazero/internal/platform"
+	wazero "github.com/wasilibs/wazerox"
+	"github.com/wasilibs/wazerox/api"
+	"github.com/wasilibs/wazerox/internal/integration_test/spectest"
+	"github.com/wasilibs/wazerox/internal/platform"
 )
 
 func TestCompiler(t *testing.T) {

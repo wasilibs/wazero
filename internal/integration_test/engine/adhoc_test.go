@@ -9,14 +9,14 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/tetratelabs/wazero"
-	"github.com/tetratelabs/wazero/api"
-	"github.com/tetratelabs/wazero/internal/platform"
-	"github.com/tetratelabs/wazero/internal/testing/binaryencoding"
-	"github.com/tetratelabs/wazero/internal/testing/proxy"
-	"github.com/tetratelabs/wazero/internal/testing/require"
-	"github.com/tetratelabs/wazero/internal/wasm"
-	"github.com/tetratelabs/wazero/sys"
+	wazero "github.com/wasilibs/wazerox"
+	"github.com/wasilibs/wazerox/api"
+	"github.com/wasilibs/wazerox/internal/platform"
+	"github.com/wasilibs/wazerox/internal/testing/binaryencoding"
+	"github.com/wasilibs/wazerox/internal/testing/proxy"
+	"github.com/wasilibs/wazerox/internal/testing/require"
+	"github.com/wasilibs/wazerox/internal/wasm"
+	"github.com/wasilibs/wazerox/sys"
 )
 
 // testCtx is an arbitrary, non-default context. Non-nil also prevents linter errors.

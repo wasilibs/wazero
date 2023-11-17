@@ -8,16 +8,16 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/tetratelabs/wazero"
-	"github.com/tetratelabs/wazero/api"
-	"github.com/tetratelabs/wazero/internal/engine/wazevo"
-	"github.com/tetratelabs/wazero/internal/engine/wazevo/testcases"
-	"github.com/tetratelabs/wazero/internal/filecache"
-	"github.com/tetratelabs/wazero/internal/integration_test/spectest"
-	v1 "github.com/tetratelabs/wazero/internal/integration_test/spectest/v1"
-	"github.com/tetratelabs/wazero/internal/testing/binaryencoding"
-	"github.com/tetratelabs/wazero/internal/testing/require"
-	"github.com/tetratelabs/wazero/internal/wasm"
+	wazero "github.com/wasilibs/wazerox"
+	"github.com/wasilibs/wazerox/api"
+	"github.com/wasilibs/wazerox/internal/engine/wazevo"
+	"github.com/wasilibs/wazerox/internal/engine/wazevo/testcases"
+	"github.com/wasilibs/wazerox/internal/filecache"
+	"github.com/wasilibs/wazerox/internal/integration_test/spectest"
+	v1 "github.com/wasilibs/wazerox/internal/integration_test/spectest/v1"
+	"github.com/wasilibs/wazerox/internal/testing/binaryencoding"
+	"github.com/wasilibs/wazerox/internal/testing/require"
+	"github.com/wasilibs/wazerox/internal/wasm"
 )
 
 const (
@@ -33,7 +33,7 @@ func TestSpectestV1(t *testing.T) {
 	configureWazevo(config)
 
 	// TODO: adds incrementally one by one as we support more test cases. And eventually remove this
-	// and migrate to integration_test/spectest/v1/spec_test.go by the time when closing https://github.com/tetratelabs/wazero/issues/1496
+	// and migrate to integration_test/spectest/v1/spec_test.go by the time when closing https://github.com/wasilibs/wazerox/issues/1496
 	for _, tc := range []struct {
 		name string
 	}{

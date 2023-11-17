@@ -1,7 +1,7 @@
 package binaryencoding
 
 import (
-	"github.com/tetratelabs/wazero/internal/wasm"
+	"github.com/wasilibs/wazerox/internal/wasm"
 )
 
 var sizePrefixedName = []byte{4, 'n', 'a', 'm', 'e'}

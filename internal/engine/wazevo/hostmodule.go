@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/tetratelabs/wazero/internal/wasm"
+	"github.com/wasilibs/wazerox/internal/wasm"
 )
 
 func buildHostModuleOpaque(m *wasm.Module) moduleContextOpaque {

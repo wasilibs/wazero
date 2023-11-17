@@ -441,7 +441,7 @@ jobs:
 
       - if: ${{ runner.os == 'Windows' }}
         name: Run standard library tests
-        # Ack failures on Windows. https://github.com/tetratelabs/wazero/issues/1410
+        # Ack failures on Windows. https://github.com/wasilibs/wazerox/issues/1410
         continue-on-error: true
         run: |
           GOOS=$(go env GOOS)

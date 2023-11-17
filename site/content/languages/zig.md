@@ -18,7 +18,7 @@ browser, tested by wazero: `wasm32-freestanding` and `wasm32-wasi`.
 ## Overview
 
 When Zig compiles a `%.zig` file with a `wasm32-*` target, the output `%.wasm`
-depends on a subset of features in the [WebAssembly 2.0 
+depends on a subset of features in the [WebAssembly 2.0
 Core specification]({{< ref "/specs#core" >}}) and [WASI]({{< ref "/specs#wasi" >}}) host
 functions.
 
@@ -47,11 +47,11 @@ compiles the source as a library, i.e. without a `main` function.
 
 ## Disclaimer
 
-This document includes notes contributed by the wazero community for Zig 0.10.1. 
+This document includes notes contributed by the wazero community for Zig 0.10.1.
 While wazero includes Zig examples, and maintainers contribute to Zig, this
-isn't a Zig official document. For more help, consider the [WebAssembly Documentation][4] 
-or joining the [#programming-discussion channel on 
-Zig's Discord][5]. 
+isn't a Zig official document. For more help, consider the [WebAssembly Documentation][4]
+or joining the [#programming-discussion channel on
+Zig's Discord][5].
 
 Meanwhile, please help us [maintain][6] this document and [star our GitHub
 repository][7], if it is helpful. Together, we can make WebAssembly easier on
@@ -66,8 +66,8 @@ software.
 
 ## Memory
 
-The Zig language performs no memory management on behalf of the programmer. 
-However, Zig has no default allocator. Instead, functions which need to allocate 
+The Zig language performs no memory management on behalf of the programmer.
+However, Zig has no default allocator. Instead, functions which need to allocate
 accept an `Allocator` parameter.
 
 ### Host Allocations
@@ -105,7 +105,7 @@ To allow the host to allocate memory, you need to define your own `malloc` and
 (func (export "free") (param $ptr i32) (param $size i32))
 ```
 
-Because Zig easily allows end-users to [plug their own allocators][12], it relatively easy to 
+Because Zig easily allows end-users to [plug their own allocators][12], it relatively easy to
 export custom `malloc`/`free` pairs to the host.
 
 For instance, the following code exports `malloc`, `free` from Zig's `page_allocator`:
@@ -134,8 +134,8 @@ For functionality the operating system would otherwise provide, you must use
 the `wasm32-wasi` target. This imports host functions in
 [WASI]({{< ref "/specs#wasi" >}}).
 
-Zig's standard library support for WASI is under active development. 
-In general, you should favor use of the standard library when compiling against 
+Zig's standard library support for WASI is under active development.
+In general, you should favor use of the standard library when compiling against
 wasm32-wasi target (e.g. `std.io`).
 
 Note: wazero includes an [example WASI project][10] including [source code][11]
@@ -154,17 +154,17 @@ performance vs defaults. Note that sometimes one sacrifices the other.
 
 ### Binary size
 
-Those with `%.wasm` binary size constraints can change their source, 
+Those with `%.wasm` binary size constraints can change their source,
 e.g. picking a [different allocator][9b] or set `zig` flags to reduce it.
 
 [`zig` flags][13]:
-Zig provides several flags to control binary size, speed of execution, 
+Zig provides several flags to control binary size, speed of execution,
 safety checks. For instance you may use
-* `-ODebug`: Fast build, enabled safety checks, slower runtime performance, 
+* `-ODebug`: Fast build, enabled safety checks, slower runtime performance,
   larger binary size
-* `-OReleaseSafe`: Medium runtime performance, enabled safety checks, 
+* `-OReleaseSafe`: Medium runtime performance, enabled safety checks,
   slower compilation speed, larger binary size
-* `-OReleaseSmall`: Medium runtime performance, disabled safety checks, 
+* `-OReleaseSmall`: Medium runtime performance, disabled safety checks,
   slower compilation speed, smaller binary size
 
 ### Performance
@@ -173,7 +173,7 @@ Those with runtime performance constraints can change their source or set
 `zig` flags to improve it.
 
 [`zig` flags][13]:
-* `-OReleaseFast`: Enable additional optimizations, possibly at the cost of 
+* `-OReleaseFast`: Enable additional optimizations, possibly at the cost of
   increased binary size.
 
 ## Frequently Asked Questions
@@ -187,10 +187,10 @@ source code may reduce binary size further.
 [2]: https://ziglang.org/documentation/0.10.1/#WASI
 [4]: https://ziglang.org/documentation/0.10.1/#WebAssembly
 [5]: https://discord.gg/gxsFFjE
-[6]: https://github.com/tetratelabs/wazero/tree/main/site/content/languages/zig.md
-[7]: https://github.com/tetratelabs/wazero/stargazers
-[9]: https://github.com/tetratelabs/wazero/tree/main/examples/allocation/zig
+[6]: https://github.com/wasilibs/wazerox/tree/main/site/content/languages/zig.md
+[7]: https://github.com/wasilibs/wazerox/stargazers
+[9]: https://github.com/wasilibs/wazerox/tree/main/examples/allocation/zig
 [9b]: https://ziglang.org/documentation/0.10.1/#Memory
-[10]: https://github.com/tetratelabs/wazero/tree/main/imports/wasi_snapshot_preview1/example/testdata/zig
-[11]: https://github.com/tetratelabs/wazero/blob/main/imports/wasi_snapshot_preview1/example/testdata/zig/cat.zig
+[10]: https://github.com/wasilibs/wazerox/tree/main/imports/wasi_snapshot_preview1/example/testdata/zig
+[11]: https://github.com/wasilibs/wazerox/blob/main/imports/wasi_snapshot_preview1/example/testdata/zig/cat.zig
 [13]: https://ziglang.org/documentation/0.10.1/#Build-Mode

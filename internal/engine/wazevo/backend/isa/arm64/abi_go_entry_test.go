@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/tetratelabs/wazero/internal/engine/wazevo/ssa"
-	"github.com/tetratelabs/wazero/internal/testing/require"
+	"github.com/wasilibs/wazerox/internal/engine/wazevo/ssa"
+	"github.com/wasilibs/wazerox/internal/testing/require"
 )
 
 func TestAbiImpl_constructGoEntryPreamble(t *testing.T) {

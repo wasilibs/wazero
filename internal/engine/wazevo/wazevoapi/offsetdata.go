@@ -1,6 +1,6 @@
 package wazevoapi
 
-import "github.com/tetratelabs/wazero/internal/wasm"
+import "github.com/wasilibs/wazerox/internal/wasm"
 
 const (
 	// FunctionInstanceSize is the size of wazevo.functionInstance.

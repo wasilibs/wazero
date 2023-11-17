@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tetratelabs/wazero"
+	wazero "github.com/wasilibs/wazerox"
 )
 
 func TestMemoryLeak(t *testing.T) {

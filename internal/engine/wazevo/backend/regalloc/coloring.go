@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/tetratelabs/wazero/internal/engine/wazevo/wazevoapi"
+	"github.com/wasilibs/wazerox/internal/engine/wazevo/wazevoapi"
 )
 
 // buildNeighbors builds the neighbors for each node in the interference graph.

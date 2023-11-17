@@ -5,8 +5,8 @@ import (
 	"math"
 	"sync"
 
-	"github.com/tetratelabs/wazero/api"
-	"github.com/tetratelabs/wazero/internal/leb128"
+	"github.com/wasilibs/wazerox/api"
+	"github.com/wasilibs/wazerox/internal/leb128"
 )
 
 // Table describes the limits of elements and its type in a table.

@@ -3,7 +3,7 @@ package regalloc
 import (
 	"fmt"
 
-	"github.com/tetratelabs/wazero/internal/engine/wazevo/wazevoapi"
+	"github.com/wasilibs/wazerox/internal/engine/wazevo/wazevoapi"
 )
 
 // assignRegisters assigns real registers to virtual registers on each instruction.
